@@ -1844,7 +1844,7 @@ TEMPLATES = {
 {% block body %}
 <h1 style="margin-top:1.6rem">Dynamische Stromtarife: Anbieter im Überblick</h1>
 <p>Eine neutrale Übersicht der bekanntesten Anbieter. Wir nennen bewusst keine Cent-Beträge, weil sich Gebühren oft ändern. Jede Angabe hat eine Quelle.</p>
-<p class="{{ 'hinweis' if veraltet else 'leise' }}">Stand der Angaben: {{ stand }}.{% if veraltet %} Diese Übersicht wurde seit über drei Monaten nicht überprüft.{% endif %} Prüfen Sie die aktuellen Bedingungen immer im Preisblatt des Anbieters.{% if not hat_werbung %} Wir erhalten für die Links auf dieser Seite derzeit keine Provision.{% endif %}</p>
+<p class="{{ 'hinweis' if veraltet else 'leise' }}">Stand der Angaben: {{ stand }}.{% if veraltet %} Diese Übersicht wurde seit über drei Monaten nicht überprüft.{% endif %} Prüfen Sie die aktuellen Bedingungen immer im Preisblatt des Anbieters.{% if hat_werbung %} Für einige Links auf dieser Seite erhalten wir eine Provision, sie sind als Werbung gekennzeichnet. Welche Anbieter wir zeigen und was wir über sie schreiben, hängt davon nicht ab.{% else %} Wir erhalten für die Links auf dieser Seite derzeit keine Provision.{% endif %}</p>
 
 <h2>Worauf es beim Vergleich ankommt</h2>
 <ol class="kriterien">

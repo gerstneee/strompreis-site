@@ -8,3 +8,4 @@ einrichten.ps1
 # Die Seite erzeugt GitHub selbst, lokale Vorschau nicht hochladen:
 docs/
 strom-uhr-workflow.yml
+CLAUDE.md
