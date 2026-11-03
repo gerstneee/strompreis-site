@@ -41,7 +41,7 @@ jobs:
           python-version: "3.12"
 
       - name: Pakete installieren
-        run: pip install requests jinja2 tzdata
+        run: pip install requests jinja2 tzdata pillow
 
       - name: Website erzeugen
         run: python main.py --no-push

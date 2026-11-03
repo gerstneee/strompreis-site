@@ -83,6 +83,10 @@ FONT_FILES = {
     ],
 }
 
+# Google Search Console: nur den content-Wert aus dem HTML-Tag eintragen, z. B. "AbC123...".
+# Leer lassen = kein Tag. Der Tag ist ein reiner Eigentumsnachweis, er überträgt keine Besucherdaten.
+GOOGLE_VERIFICATION = "e74LdhtR4SdoWSasLFoLf9Pg_rNLYavhTESsGJS5aH0"
+
 FOOTER_SOURCE = ("Datenquelle: Bundesnetzagentur | SMARD.de (CC BY 4.0), "
                  "bereitgestellt über Energy-Charts (Fraunhofer ISE).")
 
@@ -95,20 +99,52 @@ AFFILIATE = {
 }
 
 # Geräte: kwh = Verbrauch pro Durchlauf, hours = Laufzeit in ganzen Stunden, per_week = Beispielnutzung
+# Geräte: kwh = Verbrauch pro Durchlauf, hours = Laufzeit in ganzen Stunden, per_week = Beispielnutzung,
+# tipps = gerätespezifische Hinweise (Klartext), link = optionaler Verweis auf eine Erklärseite
 DEVICES = [
     {"slug": "waschmaschine", "name": "Waschmaschine", "frage": "die Waschmaschine laufen lassen",
-     "kwh": 1.0, "hours": 2, "per_week": 3},
+     "kwh": 1.0, "hours": 2, "per_week": 3,
+     "tipps": ["Viele Waschmaschinen haben eine Startzeitvorwahl oder „Fertig in …“-Taste. Damit legen Sie den Lauf bequem in die günstigen Stunden.",
+               "Am meisten spart ohnehin eine niedrigere Temperatur: 40 statt 60 Grad braucht deutlich weniger Strom."]},
     {"slug": "geschirrspueler", "name": "Geschirrspüler", "frage": "den Geschirrspüler starten",
-     "kwh": 0.9, "hours": 3, "per_week": 5},
+     "kwh": 0.9, "hours": 3, "per_week": 5,
+     "tipps": ["Die Startzeitvorwahl des Geschirrspülers ist der einfachste Weg, in die günstigen Stunden zu kommen, auch nachts.",
+               "Das Eco-Programm läuft länger, braucht aber weniger Strom."]},
     {"slug": "waeschetrockner", "name": "Wäschetrockner", "frage": "den Wäschetrockner laufen lassen",
-     "kwh": 1.5, "hours": 2, "per_week": 2},
+     "kwh": 1.5, "hours": 2, "per_week": 2,
+     "tipps": ["Ein Wärmepumpentrockner braucht etwa halb so viel Strom wie ein älterer Kondenstrockner.",
+               "Gut geschleuderte Wäsche verkürzt die Laufzeit spürbar."]},
     {"slug": "warmwasser", "name": "Warmwasserspeicher", "frage": "das Warmwasser aufheizen",
-     "kwh": 4.0, "hours": 2, "per_week": 7},
+     "kwh": 4.0, "hours": 2, "per_week": 7,
+     "tipps": ["Ein Speicher hält das Wasser stundenlang warm. Mit einer Zeitschaltuhr oder smarten Steckdose lässt sich das Aufheizen gut in günstige Stunden legen.",
+               "Fragen Sie bei größeren Heizstäben auch nach günstigeren Netzentgelten nach § 14a."],
+     "link": ("wissen/paragraf-14a-netzentgelte.html", "§ 14a einfach erklärt")},
     {"slug": "e-auto-wallbox", "name": "E-Auto (Wallbox, 11 kW)", "frage": "mein Elektroauto laden (Wallbox)",
-     "kwh": 20.0, "hours": 2, "per_week": 2},
+     "kwh": 20.0, "hours": 2, "per_week": 2,
+     "tipps": ["Viele Autos und Wallboxen können eine Ladezeit vorgeben. Stellen Sie die Abfahrtszeit ein, dann lädt das Auto in den günstigen Stunden davor.",
+               "Für steuerbare Wallboxen gibt es günstigere Netzentgelte nach § 14a."],
+     "link": ("wissen/paragraf-14a-netzentgelte.html", "§ 14a einfach erklärt")},
     {"slug": "e-auto-ladebox", "name": "E-Auto (kleine Ladebox, ca. 3,7 kW)",
      "frage": "mein Elektroauto laden (kleine Ladebox)",
-     "kwh": 20.0, "hours": 6, "per_week": 2},
+     "kwh": 20.0, "hours": 6, "per_week": 2,
+     "tipps": ["Mit kleiner Ladeleistung dauert eine Ladung mehrere Stunden. Starten Sie so, dass die längste grüne Phase genutzt wird, oft nachts.",
+               "Ein Ladetimer im Auto oder eine smarte Steckdose übernimmt das automatisch."]},
+    {"slug": "waermepumpe", "name": "Wärmepumpe (Heizung vorziehen)", "frage": "die Wärmepumpe stärker heizen lassen",
+     "kwh": 6.0, "hours": 3, "per_week": 7,
+     "tipps": ["Eine Wärmepumpe kann nicht beliebig warten, das Haus soll warm bleiben. Gut funktioniert aber das Vorziehen: In günstigen Stunden etwas mehr heizen oder den Pufferspeicher füllen, danach weniger.",
+               "Viele Geräte haben dafür einen SG-Ready-Eingang oder eine Smart-Home-Anbindung. Ihr Heizungsbauer weiß, was Ihr Gerät kann.",
+               "Für Wärmepumpen gibt es günstigere Netzentgelte nach § 14a, teils auch nach Uhrzeit gestaffelt."],
+     "link": ("wissen/paragraf-14a-netzentgelte.html", "§ 14a einfach erklärt")},
+    {"slug": "pool-pumpe", "name": "Pool-Pumpe", "frage": "die Pool-Pumpe laufen lassen",
+     "kwh": 4.0, "hours": 4, "per_week": 7,
+     "tipps": ["Die Filterpumpe muss nicht zu einer bestimmten Uhrzeit laufen, nur lange genug am Tag. Damit ist sie ideal zum Verschieben.",
+               "Eine einfache Zeitschaltuhr genügt. Im Sommer liegen günstige Stunden oft mittags, wenn viel Sonnenstrom im Netz ist."]},
+    {"slug": "batteriespeicher", "name": "Batteriespeicher (aus dem Netz laden)", "frage": "meinen Batteriespeicher aus dem Netz laden",
+     "kwh": 5.0, "hours": 3, "per_week": 3,
+     "tipps": ["Laden aus dem Netz lohnt sich nur mit dynamischem Tarif und nur, wenn Ihr Speicher und Wechselrichter das erlauben.",
+               "Beim Ein- und Ausspeichern geht ein Teil der Energie verloren, typischerweise etwa 10 bis 15 Prozent. Es lohnt sich daher nur an Tagen mit großem Preisabstand, also wenn „Warten lohnt sich deutlich“ angezeigt wird.",
+               "Für Speicher, die Strom aus dem Netz beziehen, gelten die Regeln nach § 14a."],
+     "link": ("wissen/paragraf-14a-netzentgelte.html", "§ 14a einfach erklärt")},
 ]
 
 WEEKDAYS = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"]
@@ -463,6 +499,48 @@ def compute_months(analysed: list[dict], today: date) -> list[dict]:
     return months
 
 
+def compute_week_plan(analysed: list[dict], today: date, weeks: int = 8) -> dict:
+    """Typische Woche: Für jeden Wochentag und jede Stunde, wie die Stunde in den letzten Wochen
+    eingestuft war (grün=0, gelb=1, rot=2, gemittelt). Keine Vorhersage, sondern ein Muster."""
+    start = today - timedelta(days=weeks * 7)
+    past = [a for a in analysed if start <= a["date"] < today]
+    score = {"g": 0, "y": 1, "r": 2}
+    grid: dict[int, dict[int, list[int]]] = {w: {h: [] for h in range(24)} for w in range(7)}
+    for a in past:
+        for h in a["hours"]:
+            grid[a["date"].weekday()][h["hour"]].append(score[h["lvl"]])
+    rows = []
+    for w in range(7):
+        cells = []
+        for h in range(24):
+            v = grid[w][h]
+            m = statistics.mean(v) if v else 1.0
+            lvl = "g" if m < 0.75 else ("r" if m > 1.25 else "y")
+            cells.append({"hour": h, "lvl": lvl, "n": len(v)})
+        # zusammenhängende grüne Zeiträume als Text
+        ranges, cur = [], None
+        for c in cells:
+            if c["lvl"] == "g":
+                cur = [c["hour"], c["hour"] + 1] if cur is None else [cur[0], c["hour"] + 1]
+            elif cur:
+                ranges.append(cur); cur = None
+        if cur:
+            ranges.append(cur)
+        # für den Kühlschrank: Lücken von höchstens einer Stunde schließen, die zwei längsten Zeiträume zeigen
+        merged = []
+        for r in ranges:
+            if merged and r[0] - merged[-1][1] <= 1:
+                merged[-1][1] = r[1]
+            else:
+                merged.append(list(r))
+        merged.sort(key=lambda r: r[1] - r[0], reverse=True)
+        ranges = sorted(m for m in merged[:2] if m[1] - m[0] >= 2) or sorted(merged[:1])
+        rows.append({"name": WEEKDAYS[w], "short": WD_SHORT[w], "cells": cells,
+                     "gruen": [f"{r[0]} bis {r[1]} Uhr" for r in ranges],
+                     "n_days": len({a["date"] for a in past if a["date"].weekday() == w})})
+    return {"rows": rows, "n_days": len(past), "weeks": weeks}
+
+
 # ----------------------------------------------------------------------------
 # 5. HTML-HELFER (Farbband, Säulen, Blockliste, Tabellen)
 # ----------------------------------------------------------------------------
@@ -758,6 +836,35 @@ fieldset.frage-block legend{font-weight:700;font-size:1.05rem;padding:0;margin-b
 .urteil.vielleicht{color:var(--gelb-text)}
 .urteil.nein{color:var(--tinte)}
 ul.gruende li{margin:.3rem 0}
+
+/* Kühlschrank-Plan */
+.woche{min-width:30rem;margin:.6rem 0}
+.w-kopf,.w-zeile{display:grid;grid-template-columns:2.6em repeat(24,minmax(0,1fr));gap:2px;align-items:center}
+.w-kopf span{font-size:clamp(10px,.75rem,14px);color:var(--grau);text-align:left}
+.w-zeile{margin-bottom:2px}
+.w-tag{font-weight:700;font-size:.9rem}
+.w-zelle{height:1.9rem;border-radius:2px}
+.w-zelle.g{background:var(--gruen)}.w-zelle.y{background:var(--gelb)}.w-zelle.r{background:var(--rot)}
+.kuehl-heute{border-left:6px solid var(--gruen);padding:.1rem 0 .1rem 1rem;margin:1.4rem 0}
+.kuehl-heute h2{margin:0 0 .3rem}
+.kuehl-liste td{font-size:1.05rem}
+.kuehl-fuss{color:var(--grau);font-size:.85rem;margin-top:1.4rem}
+@media print{
+ @page{size:A4 landscape;margin:10mm 12mm}
+ .w-zelle,.w-kopf,.kuehl-heute{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+ body:has(.kuehl) footer,body:has(.kuehl) .kopf{display:none}
+ .kuehl{font-size:12pt;line-height:1.35}
+ .kuehl h1{font-size:17pt;margin:0 0 .3rem!important}
+ .kuehl h2{font-size:12.5pt;margin:.7rem 0 .25rem}
+ .kuehl p{margin:.2rem 0}
+ .kuehl-heute{margin:.5rem 0;padding:.05rem 0 .05rem .7rem}
+ .woche{min-width:0;margin:.3rem 0}
+ .w-zelle{height:1.3rem}
+ .w-zeile{margin-bottom:1px}
+ .kuehl-liste td,.kuehl-liste th{padding:.15rem .5rem .15rem 0;font-size:12pt}
+ .kuehl-fuss{margin-top:.5rem;font-size:8.5pt}
+ main{padding-bottom:0}
+}
 
 /* Listen von Erklärseiten */
 ul.verweise{list-style:none;padding:0;margin:1rem 0;border-top:1px solid var(--linie)}
@@ -1194,14 +1301,23 @@ TEMPLATES = {
 <meta name="description" content="{{ description }}">
 <meta name="theme-color" content="#ffffff">
 <meta name="color-scheme" content="light">
+{% if google_verification and canon == "index.html" %}<meta name="google-site-verification" content="{{ google_verification }}">{% endif %}
 <link rel="canonical" href="{{ site_url }}/{{ canon }}">
 <meta property="og:type" content="website">
 <meta property="og:title" content="{{ title }}">
 <meta property="og:description" content="{{ description }}">
 <meta property="og:url" content="{{ site_url }}/{{ canon }}">
+<meta property="og:site_name" content="{{ site_name }}">
+<meta property="og:locale" content="de_DE">
+{% set og_img = og.get("heute") if canon == "index.html" else og.get("allgemein") %}{% if og_img %}<meta property="og:image" content="{{ og_img }}">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Strom-Uhr: 24-Stunden-Uhr mit grünen, gelben und roten Stunden">
+<meta name="twitter:card" content="summary_large_image">{% endif %}
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%23c73e32'/%3E%3Cpath d='M16 2a14 14 0 0 1 14 14H16z' fill='%232e8540'/%3E%3Cpath d='M30 16a14 14 0 0 1-14 14V16z' fill='%23e3a615'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%23fff'/%3E%3C/svg%3E">
 <link rel="preload" href="{{ root }}assets/fonts/atkinson-400.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="{{ root }}assets/style.css">
+{% if jsonld %}<script type="application/ld+json">{{ jsonld }}</script>{% endif %}
 <script>document.documentElement.className+=" js"</script>
 </head>
 <body>
@@ -1228,7 +1344,7 @@ TEMPLATES = {
  <div class="wrap">
   <p>{{ source }}</p>
   <p>Alle Preise sind Börsenpreise (Day-Ahead) ohne Netzentgelte, Steuern, Umlagen und Aufschläge der Anbieter. Das ist keine Tarif- oder Anlageberatung. Angaben ohne Gewähr. {{ built_text }}</p>
-  <nav class="fuss-nav" aria-label="Weitere Seiten"><a href="{{ root }}monat/index.html">Monatsrückblicke</a><a href="{{ root }}tarifvergleich.html">Tarifvergleich</a><a href="{{ root }}archiv.html">Archiv</a><a href="{{ root }}impressum.html">Impressum</a><a href="{{ root }}datenschutz.html">Datenschutz</a></nav>
+  <nav class="fuss-nav" aria-label="Weitere Seiten"><a href="{{ root }}wochenplan.html">Kühlschrank-Plan</a><a href="{{ root }}monat/index.html">Monatsrückblicke</a><a href="{{ root }}tarifvergleich.html">Tarifvergleich</a><a href="{{ root }}archiv.html">Archiv</a><a href="{{ root }}impressum.html">Impressum</a><a href="{{ root }}datenschutz.html">Datenschutz</a></nav>
  </div>
 </footer>
 {% if data_json %}<script id="preisdaten" type="application/json">{{ data_json }}</script>{% endif %}
@@ -1288,7 +1404,7 @@ TEMPLATES = {
 </div>
 {% if not has_today %}<p class="hinweis">Die neuesten Preise konnten noch nicht geladen werden. Angezeigt wird der letzte bekannte Tag.</p>
 {% elif not has_tomorrow %}<p class="hinweis">Die Preise für morgen stehen jeden Tag ab etwa 14 Uhr fest. Danach erscheint hier der Plan für morgen.</p>{% endif %}
-<p class="noprint"><button type="button" class="textknopf" data-print>Tagesplan drucken</button></p>
+<p class="noprint"><button type="button" class="textknopf" data-print>Tagesplan drucken</button> oder den <a href="{{ root }}wochenplan.html">Kühlschrank-Plan für die ganze Woche</a> ausdrucken</p>
 
 <h2>Wann soll ich welches Gerät einschalten?</h2>
 <div class="scroll"><table class="fahrplan">
@@ -1296,6 +1412,12 @@ TEMPLATES = {
 {% for v in ref_devices %}<tr><td><a href="{{ root }}geraete/{{ v.slug }}.html">{{ v.name }}</a></td><td data-live-hours="{{ v.hours }}">{{ ref_label }} {{ v.best.h_from }} bis {{ v.best.h_to }} Uhr</td><td class="zahl">{{ v.save_avg|de2 }} €</td></tr>{% endfor %}
 </table></div>
 <p class="leise">Die Startzeit wird ab der aktuellen Stunde berechnet. Ersparnis je Durchlauf gegenüber einem Start zu einer durchschnittlichen Zeit, mit Mehrwertsteuer. Das gilt nur mit dynamischem Stromtarif.</p>
+
+<section class="faq" aria-labelledby="faq">
+ <h2 id="faq">Häufige Fragen</h2>
+ {% for q, a in faq %}<h3>{{ q }}</h3>
+ <p>{{ a }}</p>{% endfor %}
+</section>
 
 <section class="teilen noprint" aria-labelledby="teilen">
  <h2 id="teilen">Kennen Sie jemanden, dem das hilft?</h2>
@@ -1378,6 +1500,9 @@ TEMPLATES = {
 <h2>Lohnt sich das?</h2>
 <p>Bei {{ dev.per_week }} Durchläufen pro Woche sind das grob geschätzt <strong>{{ ref.save_year|de2 }} € im Jahr</strong>. {% if ref.save_year < 10 %}Bei kleinen Geräten bleibt es bei wenigen Euro. Spürbar wird es bei Geräten mit hohem Verbrauch wie E-Auto, Warmwasserspeicher oder Wärmepumpe.{% else %}Bei diesem Gerät kann sich das Verschieben bemerkbar machen.{% endif %}</p>
 <p class="leise">Die Schätzung beruht auf den Preisen dieses Tages. Jeder Tag ist anders.</p>
+{% if dev.tipps %}<h2>Tipps für {{ dev.name.split(' (')[0] }}</h2>
+<ul>{% for t in dev.tipps %}<li>{{ t }}</li>{% endfor %}</ul>
+{% if dev.link %}<p><a href="{{ root }}{{ dev.link[0] }}">{{ dev.link[1] }}</a></p>{% endif %}{% endif %}
 <p><a class="knopf" href="{{ root }}rechner.html?geraet={{ dev.slug }}">Mit meinen Werten rechnen</a></p>
 <p class="noprint"><a href="{{ root }}geraete/index.html">Alle Geräte</a></p>
 {% endblock %}""",
@@ -1508,10 +1633,38 @@ TEMPLATES = {
 {% else %}<p>Der erste Rückblick erscheint, sobald genug Tage gesammelt sind.</p>{% endif %}
 {% endblock %}""",
 
+    "wochenplan.html": """{% extends "base.html" %}
+{% block body %}
+<div class="kuehl">
+<h1 style="margin-top:1.6rem">Kühlschrank-Plan: Wann ist Strom meistens günstig?</h1>
+<p class="noprint">Zum Ausdrucken und Aufhängen. Der Plan zeigt, wann Strom in den letzten {{ plan.weeks }} Wochen an welchem Wochentag meistens günstig war. Das ist keine Vorhersage: Die genauen Preise stehen immer erst am Vortag fest. Ein Blick auf die <a href="{{ root }}index.html">Startseite</a> zeigt die genauen Zeiten.</p>
+<p class="noprint"><button type="button" class="knopf" data-print>Plan drucken</button></p>
+
+{% if plan_today %}<section class="kuehl-heute">
+ <h2>Genau bekannt</h2>
+ {% for d, titel, wann in plan_today %}<p><strong>{{ titel }}:</strong> {% for b in d.blocks if b.lvl == "g" %}{% if loop.first %}günstig {% elif loop.last %} und {% else %}, {% endif %}{{ b.h_from }} bis {{ b.h_to }} Uhr{% else %}keine deutlichen Unterschiede zwischen den Stunden{% endfor %}. {{ d.warten.kurz.replace("{wann}", wann) }}</p>{% endfor %}
+</section>{% endif %}
+
+<h2>Die typische Woche</h2>
+{% if plan.n_days >= 14 %}
+<div class="scroll"><div class="woche" role="table" aria-label="Typische Woche: Stunden, in denen Strom meistens günstig, normal oder teuer war">
+ <div class="w-kopf" role="row"><span role="columnheader"></span>{% for h in range(24) %}<span role="columnheader">{% if h % 3 == 0 %}{{ h }}{% endif %}</span>{% endfor %}</div>
+ {% for r in plan.rows %}<div class="w-zeile" role="row"><span class="w-tag" role="rowheader">{{ r.short }}</span>{% for c in r.cells %}<span class="w-zelle {{ c.lvl }}" role="cell" title="{{ r.name }}, {{ c.hour }} Uhr: meist {{ {'g':'günstig','y':'normal','r':'teuer'}[c.lvl] }}"></span>{% endfor %}</div>{% endfor %}
+</div></div>
+<p class="leise">Grün heißt meist günstig, gelb normal, rot teuer. Die Zahlen oben sind Uhrzeiten, links beginnt der Tag um Mitternacht.</p>
+<table class="tabelle kuehl-liste">
+<tr><th>Wochentag</th><th>Meistens günstig</th></tr>
+{% for r in plan.rows %}<tr><td><strong>{{ r.name }}</strong></td><td>{% if r.gruen %}{{ r.gruen|join(", ") }}{% else %}keine Zeit, die regelmäßig günstig war{% endif %}</td></tr>{% endfor %}
+</table>
+{% else %}<p>Für die typische Woche werden mindestens zwei Wochen Daten gebraucht. Sie erscheint automatisch, sobald genug Tage gesammelt sind.</p>{% endif %}
+<p class="kuehl-fuss">Aktuelle Zeiten jeden Tag auf {{ site_url }}/. Ausgewertet wurden {{ plan.n_days }} Tage bis {{ built_date }}. Nur mit dynamischem Stromtarif sparen Sie durch die Uhrzeit Geld. {{ source }}</p>
+</div>
+{% endblock %}""",
+
     "stats.html": """{% extends "base.html" %}
 {% block body %}
 <h1 style="margin-top:1.6rem">Wann ist Strom meistens günstig?</h1>
-<p>Ausgewertet sind die letzten {{ stats.n_days }} Tage.{% if stats.n_days < 14 %} Das sind noch wenige, die Werte sind deshalb nur ein erster Eindruck.{% endif %} Einzelne Monate finden Sie in den <a href="{{ root }}monat/index.html">Monatsrückblicken</a>.</p>
+<p>Ausgewertet sind die letzten {{ stats.n_days }} Tage.{% if stats.n_days < 14 %} Das sind noch wenige, die Werte sind deshalb nur ein erster Eindruck.{% endif %} Einzelne Monate finden Sie in den <a href="{{ root }}monat/index.html">Monatsrückblicken</a>, eine Übersicht zum Ausdrucken im <a href="{{ root }}wochenplan.html">Kühlschrank-Plan</a>.</p>
 {% if stats.profile_best3 %}
 <h2>Die beste Uhrzeit</h2>
 <p class="satz" style="font-size:1.6rem">Im Schnitt zwischen {{ stats.profile_best3.h_from }} und {{ stats.profile_best3.h_to }} Uhr.</p>
@@ -1739,6 +1892,126 @@ WISSEN = [
 
 
 # ----------------------------------------------------------------------------
+# VORSCHAUBILD für WhatsApp, Facebook & Co. (PNG 1200x630, braucht Pillow; ohne Pillow wird es übersprungen)
+# ----------------------------------------------------------------------------
+def _og_font(bold: bool, size: int):
+    from PIL import ImageFont
+    names = (["atkinson-700.woff2"] if bold else ["atkinson-400.woff2"])
+    candidates = [DATA_DIR / "fonts" / n for n in names] + [
+        Path("C:/Windows/Fonts/verdanab.ttf" if bold else "C:/Windows/Fonts/verdana.ttf"),
+        Path("C:/Windows/Fonts/arialbd.ttf" if bold else "C:/Windows/Fonts/arial.ttf"),
+        Path("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf" if bold else "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"),
+    ]
+    for c in candidates:
+        try:
+            if c.exists():
+                return ImageFont.truetype(str(c), size)
+        except OSError:
+            continue
+    return None
+
+
+def next_best_window(days: list[dict], built: datetime, length: int = 3) -> tuple[dict, dict] | None:
+    """Günstigstes zusammenhängendes Zeitfenster ab jetzt (heute und morgen). Rückgabe: (Tag, Fenster)."""
+    now = built.timestamp()
+    future = [(a, h) for a in days for h in a["hours"] if h["t"] + 3600 > now]
+    best = None
+    for i in range(len(future) - length + 1):
+        part = future[i:i + length]
+        if part[-1][1]["t"] - part[0][1]["t"] != (length - 1) * 3600:
+            continue
+        avg = statistics.mean(h["ct"] for _, h in part)
+        if best is None or avg < best[0]:
+            best = (avg, part)
+    if not best:
+        return None
+    a, first = best[1][0]
+    last = best[1][-1][1]
+    return a, {"h_from": first["hour"], "h_to": last["hour"] + 1, "avg": best[0]}
+
+
+def make_og_images(day: dict, built: datetime, today: date, days: list[dict] | None = None) -> dict:
+    """Erzeugt docs/assets/og-heute.png (mit Zeiten des Tages) und og-allgemein.png.
+    Rückgabe: {"heute": url, "allgemein": url} oder {} wenn Pillow/Schrift fehlen."""
+    try:
+        from PIL import Image, ImageDraw
+    except ImportError:
+        log.warning("Pillow nicht installiert – Vorschaubilder werden übersprungen (pip install pillow)")
+        return {}
+    if _og_font(True, 40) is None:
+        log.warning("Keine Schrift für Vorschaubilder gefunden – übersprungen")
+        return {}
+    S = 2                                              # doppelt zeichnen, dann verkleinern = glatte Kanten
+    W, H = 1200 * S, 630 * S
+    col = {"g": (46, 133, 64), "y": (227, 166, 21), "r": (199, 62, 50)}
+    tinte, grau, blau, gruen_text = (28, 43, 57), (85, 99, 111), (31, 90, 138), (29, 92, 43)
+    hrs = day["hours"]
+    n = len(hrs)
+    nb = next_best_window([a for a in (days or []) if a["date"] >= today], built)
+    if nb:                                     # nächstes günstiges Fenster ab jetzt (nachmittags oft morgen)
+        day, w3 = nb
+        hrs, n = day["hours"], len(day["hours"])
+    else:
+        w3 = day["windows"][3]
+    is_today = day["date"] == today
+    out = {}
+
+    def base_image():
+        img = Image.new("RGB", (W, H), (255, 255, 255))
+        d = ImageDraw.Draw(img)
+        d.rectangle([0, 0, W, 14 * S], fill=blau)
+        cx, cy, ro, ri = 320 * S, 330 * S, 235 * S, 158 * S
+        for i, h in enumerate(hrs):
+            a0 = i * 360 / n - 90 + 0.8
+            a1 = (i + 1) * 360 / n - 90 - 0.8
+            d.pieslice([cx - ro, cy - ro, cx + ro, cy + ro], a0, a1, fill=col[h["lvl"]])
+        d.ellipse([cx - ri, cy - ri, cx + ri, cy + ri], fill=(255, 255, 255))
+        f_num = _og_font(True, 30 * S)
+        for h_lab, ang in ((0, -90), (6, 0), (12, 90), (18, 180)):
+            r = ro + 34 * S
+            x = cx + r * math.cos(math.radians(ang))
+            y = cy + r * math.sin(math.radians(ang))
+            d.text((x, y), str(h_lab), font=f_num, fill=tinte, anchor="mm")
+        return img, d, (cx, cy)
+
+    def finish(img, name):
+        path = OUT_DIR / "assets" / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        img.resize((1200, 630), Image.LANCZOS).save(path, "PNG", optimize=True)
+        return f"{SITE_URL}/assets/{name}?v={built:%Y%m%d%H}"
+
+    x0 = 640 * S
+    # Bild 1: konkrete Zeiten des Tages
+    img, d, (cx, cy) = base_image()
+    d.text((cx, cy - 22 * S), "günstig", font=_og_font(False, 30 * S), fill=grau, anchor="mm")
+    d.text((cx, cy + 24 * S), f"{w3['h_from']}–{w3['h_to']} Uhr", font=_og_font(True, 40 * S), fill=gruen_text, anchor="mm")
+    d.text((x0, 110 * S), SITE_NAME, font=_og_font(True, 40 * S), fill=blau)
+    wann = "Heute" if is_today else ("Morgen" if day["date"] == today + timedelta(days=1)
+                                     else f"Am {WEEKDAYS[day['date'].weekday()]}")
+    d.text((x0, 200 * S), f"{wann} günstig:", font=_og_font(True, 50 * S), fill=tinte)
+    d.text((x0, 265 * S), f"{w3['h_from']} bis {w3['h_to']} Uhr", font=_og_font(True, 84 * S), fill=gruen_text)
+    d.text((x0, 395 * S), day["warten"]["kurz"].replace("{wann}", wann.lower() if wann in ("Heute", "Morgen") else "an diesem Tag"),
+           font=_og_font(False, 32 * S), fill=tinte)
+    d.text((x0, 450 * S), f"{WEEKDAYS[day['date'].weekday()]}, {day['date'].day}. {MONTHS[day['date'].month - 1]} {day['date'].year}",
+           font=_og_font(False, 30 * S), fill=grau)
+    d.text((x0, 545 * S), "Börsenstrompreis, einfach erklärt", font=_og_font(False, 26 * S), fill=grau)
+    out["heute"] = finish(img, "og-heute.png")
+
+    # Bild 2: allgemein (für alle anderen Seiten)
+    img, d, (cx, cy) = base_image()
+    d.text((cx, cy), "jetzt?", font=_og_font(True, 44 * S), fill=tinte, anchor="mm")
+    d.text((x0, 110 * S), SITE_NAME, font=_og_font(True, 40 * S), fill=blau)
+    d.text((x0, 200 * S), "Wann ist Strom", font=_og_font(True, 64 * S), fill=tinte)
+    d.text((x0, 280 * S), "heute günstig?", font=_og_font(True, 64 * S), fill=tinte)
+    d.text((x0, 395 * S), "Die Uhr zeigt es auf einen Blick:", font=_og_font(False, 32 * S), fill=tinte)
+    d.text((x0, 440 * S), "Grün günstig, Gelb normal, Rot teuer.", font=_og_font(False, 32 * S), fill=tinte)
+    d.text((x0, 545 * S), "Börsenstrompreis, einfach erklärt", font=_og_font(False, 26 * S), fill=grau)
+    out["allgemein"] = finish(img, "og-allgemein.png")
+    log.info("Vorschaubilder erzeugt")
+    return out
+
+
+# ----------------------------------------------------------------------------
 # 9. RENDER / PUBLISH / MAIN
 # ----------------------------------------------------------------------------
 def ensure_fonts() -> None:
@@ -1804,15 +2077,54 @@ def render_site(analysed: list[dict], thr: dict, stats: dict, built: datetime) -
     has_tomorrow = tomorrow_a is not None
     ref_day = shown[0]
 
+    try:
+        og = make_og_images(ref_day, built, today, days)
+    except Exception as exc:  # noqa: BLE001 – Vorschaubild ist optional
+        log.warning("Vorschaubilder fehlgeschlagen: %s", exc)
+        og = {}
+
     common = dict(
+        og=og,
         site_name=SITE_NAME, site_url=SITE_URL, source=FOOTER_SOURCE, affiliate=affiliate_list(),
         built_text=f"Stand: {built:%d.%m.%Y, %H:%M} Uhr.", data_json=None, show_affiliate=False,
         nav="", canon="", title="", description="", root="", thr=thr, stats=stats,
-        warten_stark=WARTEN_STARK, warten_etwas=WARTEN_ETWAS,
+        warten_stark=WARTEN_STARK, warten_etwas=WARTEN_ETWAS, google_verification=GOOGLE_VERIFICATION,
     )
     pages: list[str] = []
 
+    sections = {"tag": ("Alle Tage", "archiv.html"), "geraete": ("Geräte", "geraete/index.html"),
+                "wissen": ("Wissen", "wissen/index.html"), "monat": ("Monatsrückblicke", "monat/index.html")}
+
+    def jsonld_for(rel: str, ctx: dict) -> Markup | None:
+        """Strukturierte Daten (schema.org) für Google: Brotkrumen, Website, FAQ, Artikel."""
+        graph = []
+        if rel == "index.html":
+            graph.append({"@type": "WebSite", "name": SITE_NAME, "url": f"{SITE_URL}/", "inLanguage": "de-DE"})
+        elif rel != "404.html":
+            items = [{"@type": "ListItem", "position": 1, "name": "Start", "item": f"{SITE_URL}/"}]
+            parts = rel.split("/")
+            if len(parts) > 1 and parts[0] in sections and rel != sections[parts[0]][1]:
+                items.append({"@type": "ListItem", "position": 2, "name": sections[parts[0]][0],
+                              "item": f"{SITE_URL}/{sections[parts[0]][1]}"})
+            items.append({"@type": "ListItem", "position": len(items) + 1, "name": ctx.get("title", ""),
+                          "item": f"{SITE_URL}/{rel}"})
+            graph.append({"@type": "BreadcrumbList", "itemListElement": items})
+        if ctx.get("faq"):
+            graph.append({"@type": "FAQPage", "mainEntity": [
+                {"@type": "Question", "name": q, "acceptedAnswer": {"@type": "Answer", "text": a}}
+                for q, a in ctx["faq"]]})
+        if rel.startswith("wissen/") and rel != "wissen/index.html":
+            graph.append({"@type": "Article", "headline": ctx.get("title", ""), "inLanguage": "de-DE",
+                          "dateModified": built.date().isoformat(), "mainEntityOfPage": f"{SITE_URL}/{rel}",
+                          "publisher": {"@type": "Organization", "name": SITE_NAME, "url": f"{SITE_URL}/"},
+                          "author": {"@type": "Organization", "name": SITE_NAME}})
+        if not graph:
+            return None
+        raw = json.dumps({"@context": "https://schema.org", "@graph": graph}, ensure_ascii=False)
+        return Markup(raw.replace("</", "<\\/"))
+
     def emit(rel: str, template: str, **ctx) -> None:
+        ctx.setdefault("jsonld", jsonld_for(rel, ctx))
         html = ENV.get_template(template).render(**{**common, **ctx})
         write(OUT_DIR / rel, html)
         pages.append(rel)
@@ -1823,6 +2135,24 @@ def render_site(analysed: list[dict], thr: dict, stats: dict, built: datetime) -
         return f"{rel}, {long}" if rel else long
 
     ref_label = "heute" if ref_day["date"] == today else f'am {ref_day["short"]}'
+    w3 = ref_day["windows"][3]
+    faq = [
+        ("Wann ist Strom heute am günstigsten?",
+         f"Am {WEEKDAYS[ref_day['date'].weekday()]}, {ref_day['date'].day}. {MONTHS[ref_day['date'].month - 1]} "
+         f"sind die günstigsten drei Stunden am Stück von {w3['h_from']} bis {w3['h_to']} Uhr. Der Börsenpreis "
+         f"liegt dann im Schnitt bei {de1(w3['avg'])} Cent pro Kilowattstunde, ohne Netzentgelte, Steuern und Umlagen."),
+        ("Spare ich mit festem Stromtarif Geld, wenn ich zu günstigen Zeiten wasche?",
+         "Nein. Mit einem festen Tarif kostet die Kilowattstunde zu jeder Uhrzeit gleich viel. Durch die Uhrzeit "
+         "sparen Sie nur mit einem dynamischen Stromtarif. Günstige Stunden sind aber oft Stunden mit viel Wind- "
+         "und Sonnenstrom."),
+        ("Wann stehen die Strompreise für morgen fest?",
+         "Die Preise für den nächsten Tag werden an der Strombörse jeden Tag um die Mittagszeit festgelegt und "
+         "stehen meist ab etwa 13 bis 14 Uhr fest. Die Strom-Uhr aktualisiert sich danach automatisch."),
+        ("Lohnt sich ein dynamischer Stromtarif für mich?",
+         "Das hängt davon ab, wie viel Strom Sie in günstige Stunden verschieben können. Mit E-Auto, Wärmepumpe "
+         "oder Speicher eher ja, sonst bringt es oft nur wenige Euro im Jahr. Der Wechsel-Check der Strom-Uhr gibt "
+         "in sechs Fragen eine Einschätzung."),
+    ]
     data_json = build_data_json(days, thr, stats, today, built)
 
     # Startseite
@@ -1831,7 +2161,7 @@ def render_site(analysed: list[dict], thr: dict, stats: dict, built: datetime) -
          ref_day=ref_day, tomorrow_day=tomorrow_a,
          ref_warten_titel="heute" if ref_day["date"] == today else f'am {ref_day["short"]}',
 
-         ref_devices=ref_day["devices"], ref_label=ref_label,
+         ref_devices=ref_day["devices"], ref_label=ref_label, faq=faq,
          data_json=data_json, nav="heute", canon="index.html",
          title="Strompreis heute: Wann ist Strom günstig?",
          description="Die Strom-Uhr zeigt, ob Strom jetzt günstig, normal oder teuer ist, und wann Waschmaschine, "
@@ -1886,6 +2216,12 @@ def render_site(analysed: list[dict], thr: dict, stats: dict, built: datetime) -
              title=f"Strompreis im {m['name']}: Rückblick und Spar-Bilanz",
              description=f"Strompreis im {m['name']}: Durchschnitt {de1(m['avg'])} ct/kWh, günstige Stunden "
                          f"{de1(m['spread'])} ct billiger. Was Verschieben gebracht hätte.")
+    emit("wochenplan.html", "wochenplan.html", plan=compute_week_plan(days, today),
+         plan_today=[(a, day_title(a), "heute" if a["date"] == today else "morgen") for a in shown if a["date"] >= today],
+         built_date=f"{built:%d.%m.%Y}", nav="statistik", canon="wochenplan.html",
+         title="Kühlschrank-Plan: Wann ist Strom meistens günstig?",
+         description="Zum Ausdrucken: An welchem Wochentag und zu welcher Uhrzeit Strom in den letzten Wochen "
+                     "meistens günstig war, mit den genauen Zeiten für heute und morgen.")
     emit("statistik.html", "stats.html", calendar=calendar_html(list(reversed(days))[:STATS_DAYS]),
          nav="statistik", canon="statistik.html", title="Strom-Statistik: Beste Uhrzeit und bester Wochentag",
          description="Wann ist Strom meistens günstig? Strom-Kalender, beste Uhrzeit und Wochentags-Statistik.")
