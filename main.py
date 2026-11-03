@@ -604,6 +604,26 @@ a:hover{text-decoration-thickness:.15em}
 .menue a{display:inline-block;padding:.35rem 0 .6rem;color:var(--tinte);text-decoration:none;border-bottom:4px solid transparent;font-size:.95rem}
 .menue a:hover{border-bottom-color:var(--linie)}
 .menue a[aria-current=page]{border-bottom-color:var(--blau);font-weight:700}
+.menue-knopf{display:none}
+
+/* Handy und Tablet: Menü hinter dem Knopf mit drei Strichen */
+@media (max-width:48rem){
+ .kopf .wrap{align-items:center;padding-bottom:.6rem}
+ .marke{padding-bottom:0}
+ .menue-knopf{display:inline-flex;align-items:center;gap:.55rem;font:inherit;font-weight:700;font-size:1rem;color:var(--tinte);background:var(--papier);border:2px solid var(--tinte);border-radius:6px;padding:.45rem .8rem;min-height:2.9rem;cursor:pointer}
+ .striche{display:inline-flex;flex-direction:column;justify-content:space-between;width:1.3rem;height:.95rem}
+ .striche i{display:block;height:3px;border-radius:2px;background:var(--tinte);transition:transform .2s ease,opacity .2s ease}
+ .menue-knopf[aria-expanded=true] .striche i:nth-child(1){transform:translateY(.4rem) rotate(45deg)}
+ .menue-knopf[aria-expanded=true] .striche i:nth-child(2){opacity:0}
+ .menue-knopf[aria-expanded=true] .striche i:nth-child(3){transform:translateY(-.4rem) rotate(-45deg)}
+ .menue{flex-basis:100%;flex-direction:column;gap:0;border-top:1px solid var(--linie);margin-top:.5rem}
+ .js .menue{display:none}
+ .js .menue.offen{display:flex}
+ .menue a{display:block;font-size:1.05rem;padding:.8rem .2rem .8rem .9rem;border-bottom:1px solid var(--linie);border-left:5px solid transparent}
+ .menue a:hover{border-bottom-color:var(--linie);background:var(--flaeche)}
+ .menue a[aria-current=page]{border-bottom-color:var(--linie);border-left-color:var(--blau);background:var(--flaeche)}
+}
+@media (prefers-reduced-motion:reduce){.striche i{transition:none}}
 
 /* Die Lage jetzt: Zifferblatt und Satz */
 .frage{padding-top:1.6rem}
@@ -714,6 +734,18 @@ form.rechner{background:var(--flaeche);padding:1.2rem clamp(.9rem,3vw,1.4rem);ma
 .warten-satz{font-size:1.45rem;font-weight:700;line-height:1.2;margin:.1rem 0 .5rem}
 .warten-morgen{margin:.3rem 0 1rem}
 
+/* Was bringt mir die Strom-Uhr? */
+.nb{white-space:nowrap}
+.fuer-wen{margin:1.8rem 0 .5rem}
+.fuer-wen h2{margin:0 0 .6rem}
+ul.wege{list-style:none;padding:0;margin:0;border-top:1px solid var(--linie)}
+ul.wege li{padding:.7rem 0 .7rem 1rem;border-bottom:1px solid var(--linie);border-left:5px solid var(--blau);max-width:none;margin:0}
+ul.wege strong{display:block}
+.knopf.zweit{background:var(--papier);color:var(--blau);margin-left:.4rem}
+.knopf.zweit:hover{background:var(--flaeche)}
+.teilen .knopf{margin:.3rem .4rem .3rem 0}
+.teilen .knopf.zweit{margin-left:0}
+
 /* Wechsel-Check */
 fieldset.frage-block{border:0;margin:0 0 1.4rem;padding:0}
 fieldset.frage-block legend{font-weight:700;font-size:1.05rem;padding:0;margin-bottom:.5rem}
@@ -751,7 +783,7 @@ footer p{max-width:46rem}
  .menue{gap:0 1rem}
 }
 @media print{
- .kopf .menue,.fuss-nav,.noprint,form,.skip,.werbung{display:none!important}
+ .kopf .menue,.menue-knopf,.fuss-nav,.noprint,form,.skip,.werbung{display:none!important}
  html{font-size:100%}
  body{font-size:12pt}
  .lage{background:#fff!important;border:1px solid #999}
@@ -1123,12 +1155,27 @@ JS = r'''
     }
   }
 
+  function initMenue() {
+    var knopf = document.querySelector('.menue-knopf');
+    var menue = document.getElementById('hauptmenue');
+    if (!knopf || !menue) { return; }
+    function setze(offen) {
+      knopf.setAttribute('aria-expanded', offen ? 'true' : 'false');
+      knopf.querySelector('.knopf-text').textContent = offen ? 'Schließen' : 'Menü';
+      if (offen) { menue.classList.add('offen'); } else { menue.classList.remove('offen'); }
+    }
+    knopf.addEventListener('click', function () { setze(knopf.getAttribute('aria-expanded') !== 'true'); });
+    document.addEventListener('keydown', function (e) {
+      if ((e.key === 'Escape' || e.key === 'Esc') && knopf.getAttribute('aria-expanded') === 'true') { setze(false); knopf.focus(); }
+    });
+  }
+
   function initPrint() {
     var pr = document.querySelectorAll('[data-print]');
     for (var j = 0; j < pr.length; j++) { pr[j].addEventListener('click', function () { window.print(); }); }
   }
 
-  [markNow, initHero, initLiveDevices, initRechner, initTarif, initCheck, initPrint].forEach(function (fn) {
+  [initMenue, markNow, initHero, initLiveDevices, initRechner, initTarif, initCheck, initPrint].forEach(function (fn) {
     try { fn(); } catch (e) { if (window.console) { console.error(e); } }
   });
 })();
@@ -1155,13 +1202,15 @@ TEMPLATES = {
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%23c73e32'/%3E%3Cpath d='M16 2a14 14 0 0 1 14 14H16z' fill='%232e8540'/%3E%3Cpath d='M30 16a14 14 0 0 1-14 14V16z' fill='%23e3a615'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%23fff'/%3E%3C/svg%3E">
 <link rel="preload" href="{{ root }}assets/fonts/atkinson-400.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="{{ root }}assets/style.css">
+<script>document.documentElement.className+=" js"</script>
 </head>
 <body>
 <a class="skip" href="#inhalt">Zum Inhalt springen</a>
 <header class="kopf">
  <div class="wrap">
   <a class="marke" href="{{ root }}index.html"><svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="14" fill="#c73e32"/><path d="M16 2a14 14 0 0 1 14 14H16z" fill="#2e8540"/><path d="M30 16a14 14 0 0 1-14 14V16z" fill="#e3a615"/><circle cx="16" cy="16" r="8" fill="#fff"/><path d="M16 16V7" stroke="#1c2b39" stroke-width="2.5" stroke-linecap="round"/></svg>{{ site_name }}</a>
-  <nav class="menue" aria-label="Hauptmenü">
+  <button class="menue-knopf" type="button" aria-expanded="false" aria-controls="hauptmenue"><span class="striche" aria-hidden="true"><i></i><i></i><i></i></span><span class="knopf-text">Menü</span></button>
+  <nav class="menue" id="hauptmenue" aria-label="Hauptmenü">
   {% set items = [('heute','index.html','Heute'),('geraete','geraete/index.html','Geräte'),('rechner','rechner.html','Kostenrechner'),('tarife','wechsel-check.html','Wechsel-Check'),('statistik','statistik.html','Statistik'),('wissen','wissen/index.html','Wissen')] %}
   {% for key, href, label in items %}<a href="{{ root }}{{ href }}"{% if nav == key %} aria-current="page"{% endif %}>{{ label }}</a>{% endfor %}
   </nav>
@@ -1224,10 +1273,17 @@ TEMPLATES = {
 {% block body %}
 <noscript><p class="hinweis">Für den Zeiger und den Satz „jetzt“ braucht Ihr Browser JavaScript. Den Tagesplan sehen Sie auch ohne.</p></noscript>
 <p class="leise noprint" style="margin-top:1rem">So lesen Sie die Uhr: Sie zeigt den ganzen Tag, 0 Uhr ist oben, 12 Uhr unten. Grün heißt günstig, gelb normal, rot teuer. Der Zeiger steht auf der aktuellen Uhrzeit.</p>
+<section class="fuer-wen" aria-labelledby="fuer-wen">
+ <h2 id="fuer-wen">Was bringt mir die <span class="nb">Strom-Uhr</span>?</h2>
+ <ul class="wege">
+  <li><strong>Sie haben einen dynamischen Stromtarif?</strong> Dann sparen Sie direkt: Starten Sie große Geräte in den grünen Stunden. <a href="#tagesplan">Zum Tagesplan</a></li>
+  <li><strong>Sie überlegen, ob sich ein Wechsel lohnt?</strong> Sechs kurze Fragen geben Ihnen eine ehrliche Antwort. <a href="{{ root }}wechsel-check.html">Zum Wechsel-Check</a></li>
+  <li><strong>Sie haben einen festen Tarif?</strong> Dann ändert die Uhrzeit nichts an Ihrer Rechnung. Grüne Stunden sind aber oft Stunden mit viel Wind- und Sonnenstrom. <a href="{{ root }}wissen/guenstiger-strom-gruener-strom.html">Warum das so ist</a></li>
+ </ul>
+</section>
 {{ warten(ref_day, root, ref_warten_titel) }}
 {% if tomorrow_day and tomorrow_day.iso != ref_day.iso %}<p class="warten-morgen"><strong>Und morgen?</strong> {{ tomorrow_day.warten.kurz.replace("{wann}", "morgen") }} Unterschied: {{ tomorrow_day.warten.diff|de1 }} Cent pro kWh.</p>{% endif %}
-<p class="leise">Günstige Stunden sind oft Stunden mit viel Wind- und Sonnenstrom. Verschieben hilft deshalb auch dem Klima, selbst mit festem Tarif. <a href="{{ root }}wissen/guenstiger-strom-gruener-strom.html">Warum das so ist</a></p>
-<div class="tage">
+<div class="tage" id="tagesplan">
 {% for d, titel in shown %}{{ plan(d, root, titel) }}{% endfor %}
 </div>
 {% if not has_today %}<p class="hinweis">Die neuesten Preise konnten noch nicht geladen werden. Angezeigt wird der letzte bekannte Tag.</p>
@@ -1240,6 +1296,14 @@ TEMPLATES = {
 {% for v in ref_devices %}<tr><td><a href="{{ root }}geraete/{{ v.slug }}.html">{{ v.name }}</a></td><td data-live-hours="{{ v.hours }}">{{ ref_label }} {{ v.best.h_from }} bis {{ v.best.h_to }} Uhr</td><td class="zahl">{{ v.save_avg|de2 }} €</td></tr>{% endfor %}
 </table></div>
 <p class="leise">Die Startzeit wird ab der aktuellen Stunde berechnet. Ersparnis je Durchlauf gegenüber einem Start zu einer durchschnittlichen Zeit, mit Mehrwertsteuer. Das gilt nur mit dynamischem Stromtarif.</p>
+
+<section class="teilen noprint" aria-labelledby="teilen">
+ <h2 id="teilen">Kennen Sie jemanden, dem das hilft?</h2>
+ {% set teiltext = "Wann ist Strom heute günstig? Die Strom-Uhr zeigt es auf einen Blick: " ~ site_url ~ "/" %}
+ <p><a class="knopf" href="https://wa.me/?text={{ teiltext|urlencode }}" rel="noopener" target="_blank">Per WhatsApp weiterschicken</a>
+ <a class="knopf zweit" href="mailto:?subject={{ 'Strom-Uhr: Wann ist Strom günstig?'|urlencode }}&amp;body={{ teiltext|urlencode }}">Per E-Mail weiterschicken</a></p>
+ <p class="leise">Die Knöpfe öffnen nur WhatsApp oder Ihr E-Mail-Programm mit einem vorbereiteten Text. Wir erfahren nicht, ob und an wen Sie die Seite schicken.</p>
+</section>
 
 <h2>Habe ich überhaupt etwas davon?</h2>
 <p>Nur mit einem dynamischen Stromtarif zahlen Sie zu günstigen Zeiten weniger. Ob sich so ein Tarif für Sie lohnt, finden Sie im <a href="{{ root }}wechsel-check.html">Wechsel-Check</a> mit sechs kurzen Fragen heraus. Was Verschieben in den letzten Wochen gebracht hätte, zeigt der <a href="{{ root }}monat/index.html">Monatsrückblick</a>.</p>
