@@ -199,6 +199,19 @@ ANBIETER = [
                 "Ohne Smart Meter wird nach einem Standardlastprofil für Ihre Region abgerechnet. Ihr tatsächlicher Stundenverbrauch ist dann nicht bekannt, Verschieben senkt Ihre Rechnung nicht.",
                 "Das Preisrisiko tragen bei diesem Modell die Kunden."],
      "quellen": [("ZfK-Interview mit Rabot Energy (12/2024)", "https://www.zfk.de/digitalisierung/smart-city-energy/unsere-kunden-sparen-bei-dynamischen-tarifen-bis-zu-40-prozent-auch-ohne-intelligentes-messsystem")]},
+    {"name": "naturstrom (naturstrom smart)", "url": "https://www.naturstrom.de/privatkunden/oekostrom/naturstrom-smart", "affiliate_url": "",
+     "fuer": "Haushalte mit Smart Meter, die Ökostrom aus Deutschland möchten, besonders mit E-Auto oder Wärmepumpe",
+     "ohne_sm": "nein, bis dahin gilt ein Übergangstarif mit Festpreis",
+     "kuendigung": "keine Mindestlaufzeit, 4 Wochen zum Monatsende",
+     "fakten": ["Der Energiepreis folgt viertelstündlich dem Börsenpreis, ohne Ober- oder Untergrenze. Dazu kommen eine Servicepauschale pro Kilowattstunde, Netzentgelte, Steuern, Umlagen und ein monatlicher Grundpreis.",
+                "Voraussetzung ist ein Smart Meter. Wer naturstrom smart bucht, bekommt den Einbau laut Anbieter ohne Einbau- und Anfahrtskosten. Bis der Zähler eingebaut und eingerichtet ist, gilt ein Übergangstarif mit festem Energiepreis.",
+                "100 % Ökostrom aus Deutschland aus Sonne, Wind und Wasser, mit Grüner-Strom-Label.",
+                "Mit App, die unter anderem das Laden eines E-Autos an der Wallbox in günstige Zeiten legt.",
+                "Von Finanztip im September 2025 wegen seiner Gebühren empfohlen."],
+     "quellen": [("naturstrom: Tarif naturstrom smart", "https://www.naturstrom.de/privatkunden/oekostrom/naturstrom-smart"),
+                 ("naturstrom: Smart Meter", "https://www.naturstrom.de/privatkunden/oekostrom/smart-meter"),
+                 ("naturstrom-Blog: naturstrom smart geht an den Start", "https://www.naturstrom.de/blog/energiewende/naturstrom-smart-geht-an-den-start/"),
+                 ("Finanztip: Stromtarif ohne Festpreis", "https://finanztip.de/daily/stromtarif-ohne-festpreis-hunderte-euro-sparen-oder-risiko/")]},
     {"name": "1KOMMA5° (Dynamic Pulse)", "url": "https://1komma5.com/de/", "affiliate_url": "",
      "fuer": "vor allem Haushalte mit Solaranlage oder Wärmepumpe und dem Energiemanager des Anbieters",
      "ohne_sm": "keine klare Angabe",
@@ -1873,7 +1886,7 @@ TEMPLATES = {
 <p class="quellen">Quellen: <a href="https://www.gesetze-im-internet.de/enwg_2005/__41a.html" rel="noopener" target="_blank">§&nbsp;41a EnWG</a>; <a href="https://www.swm.de/strom/oekostrom/oekostrom-dynamisch" rel="noopener nofollow" target="_blank">SWM: Ökostrom dynamisch</a></p>
 
 <h2>Weitere Empfehlungen von Finanztip</h2>
-<p>Finanztip hat im September 2025 neben Ostrom und Octopus auch <strong>naturstrom smart</strong> und <strong>Volkswagen Naturstrom Flex</strong> wegen niedriger Gebühren empfohlen. Wichtig laut Finanztip: Je unflexibler Ihr Stromverbrauch, desto eher wird ein dynamischer Tarif zum Kostenrisiko.</p>
+<p>Finanztip hat im September 2025 neben Ostrom, Octopus und naturstrom smart (alle oben beschrieben) auch <strong>Volkswagen Naturstrom Flex</strong> wegen niedriger Gebühren empfohlen. Wichtig laut Finanztip: Je unflexibler Ihr Stromverbrauch, desto eher wird ein dynamischer Tarif zum Kostenrisiko.</p>
 <p class="quellen">Quelle: <a href="https://finanztip.de/daily/stromtarif-ohne-festpreis-hunderte-euro-sparen-oder-risiko/" rel="noopener" target="_blank">Finanztip, 19.09.2025</a></p>
 
 <h2>So gehen Sie vor</h2>
@@ -2690,7 +2703,7 @@ def render_site(analysed: list[dict], stats: dict, built: datetime) -> int:
          hat_werbung=any(a["affiliate_url"] for a in ANBIETER), nav="tarife",
          canon="dynamische-stromtarife-anbieter.html", show_affiliate=False,
          title="Dynamische Stromtarife: Anbieter im Überblick",
-         description="Tibber, Ostrom, Octopus, Rabot und Co. neutral erklärt: Wer braucht einen Smart Meter, wie wird "
+         description="Tibber, Ostrom, Octopus, Rabot, naturstrom und Co. neutral erklärt: Wer braucht einen Smart Meter, wie wird "
                      "abgerechnet, wie kündbar? Mit Quellen und ohne Werbeversprechen.")
     emit("kalender.html", "kalender.html", kalender=kalender, nav="heute", canon="kalender.html",
          title="Günstige Strom-Zeiten im Kalender abonnieren",
