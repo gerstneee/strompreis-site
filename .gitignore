@@ -1,0 +1,10 @@
+logs/
+.venv/
+.run.lock
+__pycache__/
+main_backup_*.py
+einrichten.bat
+einrichten.ps1
+# Die Seite erzeugt GitHub selbst, lokale Vorschau nicht hochladen:
+docs/
+strom-uhr-workflow.yml

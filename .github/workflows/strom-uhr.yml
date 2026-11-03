@@ -1,0 +1,71 @@
+# Strom-Uhr: läuft täglich bei GitHub (kostenlos für öffentliche Repositories).
+# Erzeugt die Website mit main.py, speichert neue Preisdaten im Repository und veröffentlicht die Seite.
+name: Strom-Uhr aktualisieren
+
+on:
+  schedule:
+    # Zeiten in UTC. Die Strombörse veröffentlicht die Preise für morgen gegen 13-14 Uhr deutscher Zeit.
+    - cron: "45 12 * * *"   # 13:45 Winterzeit / 14:45 Sommerzeit
+    - cron: "45 13 * * *"   # 14:45 Winterzeit / 15:45 Sommerzeit
+    - cron: "30 15 * * *"   # Nachzügler, falls die Börse spät dran ist
+    - cron: "20 22 * * *"   # 00:20 Sommerzeit (Tageswechsel)
+    - cron: "20 23 * * *"   # 00:20 Winterzeit (Tageswechsel)
+  workflow_dispatch:        # Knopf "Run workflow" zum manuellen Start
+  push:                     # sofort neu bauen, wenn du Skript, Rechtstexte oder diesen Ablauf änderst
+    branches: [main]
+    paths: ["main.py", "legal/**", ".github/workflows/**"]
+
+permissions:
+  contents: write           # neue Preisdaten speichern
+  pages: write              # Seite veröffentlichen
+  id-token: write
+
+concurrency:
+  group: strom-uhr
+  cancel-in-progress: false
+
+jobs:
+  aktualisieren:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Repository holen
+        uses: actions/checkout@v4
+
+      - name: Python einrichten
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Pakete installieren
+        run: pip install requests jinja2 tzdata
+
+      - name: Website erzeugen
+        run: python main.py --no-push
+
+      - name: Neue Preisdaten speichern
+        run: |
+          git config user.name "strom-uhr-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data
+          if git diff --cached --quiet; then
+            echo "Keine neuen Preisdaten."
+          else
+            git commit -m "Preisdaten $(date -u +%Y-%m-%d)"
+            for i in 1 2 3; do
+              git pull --rebase origin main && git push origin HEAD:main && break
+              sleep 10
+            done
+          fi
+
+      - name: Seite für GitHub Pages vorbereiten
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs
+
+      - name: Seite veröffentlichen
+        id: deployment
+        uses: actions/deploy-pages@v4
