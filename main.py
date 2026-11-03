@@ -62,9 +62,9 @@ TZ = ZoneInfo("Europe/Berlin")
 API_URL = "https://api.energy-charts.info/price"
 USER_AGENT = f"{SITE_NAME}/2.0 (+{SITE_URL})"
 
-BACKFILL_DAYS = 62        # so viele zurückliegende Tage werden (einmalig) nachgeladen (für Monatsrückblick)
+HISTORY_DAYS = 366        # Preisgeschichte: so viele Tage zurück werden (einmalig, monatsweise) nachgeladen
+RECENT_DAYS = 7           # die letzten Tage werden einzeln abgefragt (falls noch nicht im Cache)
 STATS_DAYS = 30           # Zeitraum für Ampel-Schwellen und Statistik
-ARCHIVE_MAX = 120         # so viele Tage maximal im Archiv
 MWST = 1.19
 DEFAULT_AUFSCHLAG = 18.0  # Beispielwert in ct/kWh netto (Netzentgelte + Steuern + Umlagen + Anbieter)
 
@@ -213,50 +213,103 @@ def to_local(ts: int) -> datetime:
     return datetime.fromtimestamp(ts, TZ)
 
 
-def fetch_day(d: date) -> list[list[float]] | None:
-    """Liefert [[unix_seconds, EUR/MWh], ...] für den lokalen Tag d oder None.
-    Vollständige Tage werden gecacht; unvollständige (z. B. morgen vor 13 Uhr) nicht."""
+def api_get(start: date, end: date, label: str) -> dict | None:
+    """Fragt die Energy-Charts-API für [start, end) ab. Gibt das JSON zurück,
+    {} wenn es (noch) keine Daten gibt (404), oder None bei endgültigem Fehler."""
     global HARD_FAILS
-    DATA_DIR.mkdir(exist_ok=True)
-    cache = DATA_DIR / f"{d.isoformat()}.json"
-    if cache.exists():
-        return json.loads(cache.read_text(encoding="utf-8"))
-
-    params = {"bzn": "DE-LU", "start": d.isoformat(), "end": (d + timedelta(days=1)).isoformat()}
+    params = {"bzn": "DE-LU", "start": start.isoformat(), "end": end.isoformat()}
     for attempt in range(1, 6):
         try:
-            r = requests.get(API_URL, params=params, timeout=30, headers={"User-Agent": USER_AGENT})
-            if r.status_code == 404:      # Tag noch nicht veröffentlicht: kein Fehler, kein Retry
-                log.info("Tag %s noch nicht veröffentlicht (404)", d)
-                return None
+            r = requests.get(API_URL, params=params, timeout=60, headers={"User-Agent": USER_AGENT})
+            if r.status_code == 404:      # (noch) nicht veröffentlicht: kein Fehler, kein Retry
+                log.info("%s noch nicht veröffentlicht (404)", label)
+                return {}
             if r.status_code == 429:      # Rate-Limit: länger warten, dann neu versuchen
                 ra = str(r.headers.get("Retry-After", ""))
                 wait = int(ra) if ra.isdigit() else 30
-                log.warning("Rate-Limit (429) bei %s – warte %ds", d, wait)
+                log.warning("Rate-Limit (429) bei %s – warte %ds", label, wait)
                 time.sleep(wait)
                 continue
             r.raise_for_status()
             time.sleep(1)                 # höflicher Abstand zwischen Anfragen
-            js = r.json()
-            pts = [
-                [t, p]
-                for t, p in zip(js.get("unix_seconds") or [], js.get("price") or [])
-                if p is not None and to_local(t).date() == d
-            ]
-            hours = {t // 3600 for t, _ in pts}
-            if len(hours) < 23:          # Tag unvollständig / noch nicht veröffentlicht
-                log.info("Tag %s noch unvollständig (%d Stunden) – kein Cache", d, len(hours))
-                return None
-            cache.write_text(json.dumps(pts), encoding="utf-8")
-            log.info("Tag %s geladen (%d Datenpunkte)", d, len(pts))
-            return pts
+            return r.json()
         except (requests.RequestException, ValueError) as exc:
             wait = 2 ** attempt
-            log.warning("Abruf %s fehlgeschlagen (Versuch %d/5): %s – warte %ds", d, attempt, exc, wait)
+            log.warning("Abruf %s fehlgeschlagen (Versuch %d/5): %s – warte %ds", label, attempt, exc, wait)
             time.sleep(wait)
-    log.error("Abruf %s endgültig fehlgeschlagen", d)
+    log.error("Abruf %s endgültig fehlgeschlagen", label)
     HARD_FAILS += 1
     return None
+
+
+def split_days(js: dict) -> dict[date, list[list[float]]]:
+    """Teilt eine API-Antwort in lokale Kalendertage auf."""
+    out: dict[date, list[list[float]]] = {}
+    for t, p in zip(js.get("unix_seconds") or [], js.get("price") or []):
+        if p is not None:
+            out.setdefault(to_local(t).date(), []).append([t, p])
+    return out
+
+
+def is_complete(pts: list[list[float]]) -> bool:
+    return len({int(t) // 3600 for t, _ in pts}) >= 23
+
+
+def fetch_day(d: date) -> list[list[float]] | None:
+    """Liefert [[unix_seconds, EUR/MWh], ...] für den lokalen Tag d oder None.
+    Vollständige Tage werden gecacht; unvollständige (z. B. morgen vor 13 Uhr) nicht."""
+    DATA_DIR.mkdir(exist_ok=True)
+    cache = DATA_DIR / f"{d.isoformat()}.json"
+    if cache.exists():
+        return json.loads(cache.read_text(encoding="utf-8"))
+    js = api_get(d, d + timedelta(days=1), f"Tag {d}")
+    if not js:
+        return None
+    pts = split_days(js).get(d, [])
+    if not is_complete(pts):
+        log.info("Tag %s noch unvollständig (%d Stunden) – kein Cache", d, len({int(t) // 3600 for t, _ in pts}))
+        return None
+    cache.write_text(json.dumps(pts), encoding="utf-8")
+    log.info("Tag %s geladen (%d Datenpunkte)", d, len(pts))
+    return pts
+
+
+GAPS_FILE = "luecken.txt"   # Tage, die die Börse nachweislich nicht liefert (werden nicht erneut abgefragt)
+
+
+def backfill_history(first: date, last: date) -> None:
+    """Lädt fehlende Tage zwischen first und last (einschließlich) monatsweise nach:
+    eine Abfrage pro Monat statt eine pro Tag. Einmalig, danach liegt alles im Cache."""
+    DATA_DIR.mkdir(exist_ok=True)
+    gaps_path = DATA_DIR / GAPS_FILE
+    gaps = set(gaps_path.read_text(encoding="utf-8").split()) if gaps_path.exists() else set()
+    missing: dict[tuple[int, int], list[date]] = {}
+    d = first
+    while d <= last:
+        if not (DATA_DIR / f"{d.isoformat()}.json").exists() and d.isoformat() not in gaps:
+            missing.setdefault((d.year, d.month), []).append(d)
+        d += timedelta(days=1)
+    if not missing:
+        return
+    log.info("Lade Preisgeschichte nach: %d Tage in %d Monaten", sum(len(v) for v in missing.values()), len(missing))
+    for (y, mth), days in sorted(missing.items()):
+        if HARD_FAILS >= 2:
+            log.warning("Nachladen abgebrochen (Schnittstelle nicht erreichbar), nächster Lauf versucht es erneut")
+            return
+        js = api_get(min(days), max(days) + timedelta(days=1), f"Monat {y}-{mth:02d}")
+        if js is None:
+            continue
+        per_day = split_days(js) if js else {}
+        loaded = 0
+        for day in days:
+            pts = per_day.get(day, [])
+            if is_complete(pts):
+                (DATA_DIR / f"{day.isoformat()}.json").write_text(json.dumps(pts), encoding="utf-8")
+                loaded += 1
+            elif js:                      # Antwort kam, Tag fehlt trotzdem: als Lücke merken
+                gaps.add(day.isoformat())
+        log.info("Monat %d-%02d: %d von %d Tagen geladen", y, mth, loaded, len(days))
+    gaps_path.write_text("\n".join(sorted(gaps)), encoding="utf-8")
 
 
 # ----------------------------------------------------------------------------
@@ -499,46 +552,76 @@ def compute_months(analysed: list[dict], today: date) -> list[dict]:
     return months
 
 
+def typical_ranges(days: list[dict], max_ranges: int = 2) -> tuple[list[dict], list[str]]:
+    """Typisches Stundenmuster einer Gruppe von Tagen: je Stunde die mittlere Einstufung
+    (grün=0, gelb=1, rot=2) und daraus die meist günstigen Zeiträume als Text."""
+    score = {"g": 0, "y": 1, "r": 2}
+    per_hour: dict[int, list[int]] = {h: [] for h in range(24)}
+    for a in days:
+        for h in a["hours"]:
+            per_hour[h["hour"]].append(score[h["lvl"]])
+    cells = []
+    for h in range(24):
+        v = per_hour[h]
+        m = statistics.mean(v) if v else 1.0
+        cells.append({"hour": h, "lvl": "g" if m < 0.75 else ("r" if m > 1.25 else "y"), "n": len(v)})
+    ranges, cur = [], None
+    for c in cells:
+        if c["lvl"] == "g":
+            cur = [c["hour"], c["hour"] + 1] if cur is None else [cur[0], c["hour"] + 1]
+        elif cur:
+            ranges.append(cur)
+            cur = None
+    if cur:
+        ranges.append(cur)
+    merged: list[list[int]] = []      # Lücken von höchstens einer Stunde schließen
+    for r in ranges:
+        if merged and r[0] - merged[-1][1] <= 1:
+            merged[-1][1] = r[1]
+        else:
+            merged.append(list(r))
+    merged.sort(key=lambda r: r[1] - r[0], reverse=True)
+    best = sorted(m for m in merged[:max_ranges] if m[1] - m[0] >= 2) or sorted(merged[:1])
+    return cells, [f"{r[0]} bis {r[1]} Uhr" for r in best]
+
+
 def compute_week_plan(analysed: list[dict], today: date, weeks: int = 8) -> dict:
     """Typische Woche: Für jeden Wochentag und jede Stunde, wie die Stunde in den letzten Wochen
     eingestuft war (grün=0, gelb=1, rot=2, gemittelt). Keine Vorhersage, sondern ein Muster."""
     start = today - timedelta(days=weeks * 7)
     past = [a for a in analysed if start <= a["date"] < today]
-    score = {"g": 0, "y": 1, "r": 2}
-    grid: dict[int, dict[int, list[int]]] = {w: {h: [] for h in range(24)} for w in range(7)}
-    for a in past:
-        for h in a["hours"]:
-            grid[a["date"].weekday()][h["hour"]].append(score[h["lvl"]])
     rows = []
     for w in range(7):
-        cells = []
-        for h in range(24):
-            v = grid[w][h]
-            m = statistics.mean(v) if v else 1.0
-            lvl = "g" if m < 0.75 else ("r" if m > 1.25 else "y")
-            cells.append({"hour": h, "lvl": lvl, "n": len(v)})
-        # zusammenhängende grüne Zeiträume als Text
-        ranges, cur = [], None
-        for c in cells:
-            if c["lvl"] == "g":
-                cur = [c["hour"], c["hour"] + 1] if cur is None else [cur[0], c["hour"] + 1]
-            elif cur:
-                ranges.append(cur); cur = None
-        if cur:
-            ranges.append(cur)
-        # für den Kühlschrank: Lücken von höchstens einer Stunde schließen, die zwei längsten Zeiträume zeigen
-        merged = []
-        for r in ranges:
-            if merged and r[0] - merged[-1][1] <= 1:
-                merged[-1][1] = r[1]
-            else:
-                merged.append(list(r))
-        merged.sort(key=lambda r: r[1] - r[0], reverse=True)
-        ranges = sorted(m for m in merged[:2] if m[1] - m[0] >= 2) or sorted(merged[:1])
-        rows.append({"name": WEEKDAYS[w], "short": WD_SHORT[w], "cells": cells,
-                     "gruen": [f"{r[0]} bis {r[1]} Uhr" for r in ranges],
-                     "n_days": len({a["date"] for a in past if a["date"].weekday() == w})})
+        group = [a for a in past if a["date"].weekday() == w]
+        cells, gruen = typical_ranges(group)
+        rows.append({"name": WEEKDAYS[w], "short": WD_SHORT[w], "cells": cells, "gruen": gruen,
+                     "n_days": len(group)})
     return {"rows": rows, "n_days": len(past), "weeks": weeks}
+
+
+def compute_year(analysed: list[dict], months: list[dict], today: date) -> dict | None:
+    """Rückblick über die letzten 12 abgeschlossenen Monate, mit Sommer/Winter-Vergleich."""
+    done = [m for m in months if m["complete"]][-12:]
+    if len(done) < 3:
+        return None
+    first = done[0]["days"][0]["date"]
+    past = [a for a in analysed if first <= a["date"] < today]
+    sommer = [a for a in past if 4 <= a["date"].month <= 9]
+    winter = [a for a in past if a["date"].month in (10, 11, 12, 1, 2, 3)]
+    max_avg = max(m["avg"] for m in done) or 1
+    rows = [{**m, "bar": max(2, round(100 * max(m["avg"], 0) / max_avg))} for m in done]
+    hh = [m["haushalt"] for m in done]
+    return {
+        "rows": rows, "first": done[0]["name"], "last": done[-1]["name"], "n_months": len(done),
+        "cheapest": min(done, key=lambda m: m["avg"]), "priciest": max(done, key=lambda m: m["avg"]),
+        "best_spread": max(done, key=lambda m: m["spread"]),
+        "haushalt_jahr": sum(hh), "haushalt_monat": statistics.mean(hh),
+        "negative_hours": sum(m["negative_hours"] for m in done),
+        "avg": statistics.mean(a["avg"] for a in past),
+        "sommer": typical_ranges(sommer)[1] if len(sommer) >= 20 else None,
+        "winter": typical_ranges(winter)[1] if len(winter) >= 20 else None,
+        "n_sommer": len(sommer), "n_winter": len(winter),
+    }
 
 
 # ----------------------------------------------------------------------------
@@ -836,6 +919,20 @@ fieldset.frage-block legend{font-weight:700;font-size:1.05rem;padding:0;margin-b
 .urteil.vielleicht{color:var(--gelb-text)}
 .urteil.nein{color:var(--tinte)}
 ul.gruende li{margin:.3rem 0}
+
+/* Archiv und Jahresrückblick */
+ul.tage-liste{list-style:none;padding:0;margin:.4rem 0 1rem;display:flex;flex-wrap:wrap;gap:.35rem .5rem}
+ul.tage-liste li{margin:0}
+ul.tage-liste a{display:inline-flex;align-items:center;gap:.35rem;padding:.3rem .55rem;border:1px solid var(--linie);border-radius:4px;text-decoration:none;color:var(--tinte);font-size:.9rem}
+ul.tage-liste a:hover{border-color:var(--blau)}
+.marker.n{background:#9aa7b1}
+.balken{display:inline-block;width:6rem;height:.8rem;background:var(--flaeche);border-radius:2px;vertical-align:middle;margin-right:.3rem}
+.balken span{display:block;height:100%;background:var(--blau);border-radius:2px}
+.kal-abo{border-left:6px solid var(--blau);padding:.1rem 0 .1rem 1rem;margin:1.2rem 0}
+.kal-abo h3{margin:.2rem 0}
+.kal-abo .knopf{margin:.25rem .4rem .25rem 0}
+.kal-abo .knopf.zweit{margin-left:0}
+code{font-size:.85em;background:var(--flaeche);padding:.1rem .3rem;border-radius:3px;overflow-wrap:anywhere}
 
 /* Kühlschrank-Plan */
 .woche{min-width:30rem;margin:.6rem 0}
@@ -1344,7 +1441,7 @@ TEMPLATES = {
  <div class="wrap">
   <p>{{ source }}</p>
   <p>Alle Preise sind Börsenpreise (Day-Ahead) ohne Netzentgelte, Steuern, Umlagen und Aufschläge der Anbieter. Das ist keine Tarif- oder Anlageberatung. Angaben ohne Gewähr. {{ built_text }}</p>
-  <nav class="fuss-nav" aria-label="Weitere Seiten"><a href="{{ root }}wochenplan.html">Kühlschrank-Plan</a><a href="{{ root }}monat/index.html">Monatsrückblicke</a><a href="{{ root }}tarifvergleich.html">Tarifvergleich</a><a href="{{ root }}archiv.html">Archiv</a><a href="{{ root }}impressum.html">Impressum</a><a href="{{ root }}datenschutz.html">Datenschutz</a></nav>
+  <nav class="fuss-nav" aria-label="Weitere Seiten"><a href="{{ root }}strompreis-morgen.html">Strompreis morgen</a><a href="{{ root }}kalender.html">Kalender-Abo</a><a href="{{ root }}wochenplan.html">Kühlschrank-Plan</a><a href="{{ root }}jahresrueckblick.html">Jahresrückblick</a><a href="{{ root }}monat/index.html">Monatsrückblicke</a><a href="{{ root }}tarifvergleich.html">Tarifvergleich</a><a href="{{ root }}archiv.html">Archiv</a><a href="{{ root }}impressum.html">Impressum</a><a href="{{ root }}datenschutz.html">Datenschutz</a></nav>
  </div>
 </footer>
 {% if data_json %}<script id="preisdaten" type="application/json">{{ data_json }}</script>{% endif %}
@@ -1398,13 +1495,13 @@ TEMPLATES = {
  </ul>
 </section>
 {{ warten(ref_day, root, ref_warten_titel) }}
-{% if tomorrow_day and tomorrow_day.iso != ref_day.iso %}<p class="warten-morgen"><strong>Und morgen?</strong> {{ tomorrow_day.warten.kurz.replace("{wann}", "morgen") }} Unterschied: {{ tomorrow_day.warten.diff|de1 }} Cent pro kWh.</p>{% endif %}
+{% if tomorrow_day and tomorrow_day.iso != ref_day.iso %}<p class="warten-morgen"><strong>Und morgen?</strong> {{ tomorrow_day.warten.kurz.replace("{wann}", "morgen") }} Unterschied: {{ tomorrow_day.warten.diff|de1 }} Cent pro kWh. <a href="{{ root }}strompreis-morgen.html">Strompreis morgen</a></p>{% endif %}
 <div class="tage" id="tagesplan">
 {% for d, titel in shown %}{{ plan(d, root, titel) }}{% endfor %}
 </div>
 {% if not has_today %}<p class="hinweis">Die neuesten Preise konnten noch nicht geladen werden. Angezeigt wird der letzte bekannte Tag.</p>
-{% elif not has_tomorrow %}<p class="hinweis">Die Preise für morgen stehen jeden Tag ab etwa 14 Uhr fest. Danach erscheint hier der Plan für morgen.</p>{% endif %}
-<p class="noprint"><button type="button" class="textknopf" data-print>Tagesplan drucken</button> oder den <a href="{{ root }}wochenplan.html">Kühlschrank-Plan für die ganze Woche</a> ausdrucken</p>
+{% elif not has_tomorrow %}<p class="hinweis">Die Preise für morgen stehen jeden Tag ab etwa 14 Uhr fest. Danach erscheint hier der Plan für morgen. Bis dahin zeigt die Seite <a href="{{ root }}strompreis-morgen.html">Strompreis morgen</a>, wann es an diesem Wochentag meistens günstig war.</p>{% endif %}
+<p class="noprint"><button type="button" class="textknopf" data-print>Tagesplan drucken</button> oder den <a href="{{ root }}wochenplan.html">Kühlschrank-Plan für die ganze Woche</a> ausdrucken. Noch bequemer: die günstigen Zeiten <a href="{{ root }}kalender.html">im eigenen Kalender abonnieren</a>.</p>
 
 <h2>Wann soll ich welches Gerät einschalten?</h2>
 <div class="scroll"><table class="fahrplan">
@@ -1623,7 +1720,7 @@ TEMPLATES = {
     "months_index.html": """{% extends "base.html" %}
 {% block body %}
 <h1 style="margin-top:1.6rem">Monatsrückblicke</h1>
-<p>Was hätte Verschieben in den vergangenen Monaten gebracht? Jeden Monat rechnen wir es mit den echten Börsenpreisen nach.</p>
+<p>Was hätte Verschieben in den vergangenen Monaten gebracht? Jeden Monat rechnen wir es mit den echten Börsenpreisen nach. Den Überblick über zwölf Monate gibt der <a href="{{ root }}jahresrueckblick.html">Jahresrückblick</a>.</p>
 {% if months %}
 <div class="scroll"><table class="fahrplan">
 <tr><th>Monat</th><th class="zahl">Ø Börsenpreis</th><th class="zahl">Vorteil günstige Stunden</th><th class="zahl">Haushalt mit E-Auto</th></tr>
@@ -1692,9 +1789,105 @@ TEMPLATES = {
     "archive.html": """{% extends "base.html" %}
 {% block body %}
 <h1 style="margin-top:1.6rem">Alle Tage</h1>
-<div class="scroll"><table class="tabelle"><tr><th>Tag</th><th>Durchschnitt</th><th>Günstigste drei Stunden</th></tr>
-{% for d in days %}<tr><td><a href="{{ root }}tag/{{ d.iso }}.html">{{ d.pretty }}</a></td><td>{{ d.avg|de1 }} ct/kWh</td><td>{{ d.windows[3].h_from }} bis {{ d.windows[3].h_to }} Uhr</td></tr>{% endfor %}
+<p>Jeder ausgewertete Tag, nach Monaten sortiert. Das Kästchen zeigt, wie sehr sich Warten an diesem Tag gelohnt hat: grün deutlich, gelb etwas, grau kaum. Den Überblick über das ganze Jahr gibt der <a href="{{ root }}jahresrueckblick.html">Jahresrückblick</a>.</p>
+{% for g in groups %}
+<h2>{{ g.name }}</h2>
+{% if g.key in month_keys %}<p><a href="{{ root }}monat/{{ g.key }}.html">Rückblick {{ g.name }}</a></p>{% endif %}
+<ul class="tage-liste">{% for d in g.days %}<li><a href="{{ root }}tag/{{ d.iso }}.html"><span class="marker {{ d.warten.lvl }}" aria-hidden="true"></span>{{ d.short }}</a></li>{% endfor %}</ul>
+{% endfor %}
+{% endblock %}""",
+
+    "year.html": """{% extends "base.html" %}
+{% block body %}
+{% if not y %}
+<h1 style="margin-top:1.6rem">Jahresrückblick</h1>
+<p>Der Jahresrückblick erscheint automatisch, sobald mindestens drei vollständige Monate ausgewertet sind. Bis dahin finden Sie die einzelnen Monate in den <a href="{{ root }}monat/index.html">Monatsrückblicken</a>.</p>
+{% else %}
+<h1 style="margin-top:1.6rem">Jahresrückblick: Strompreis von {{ y.first }} bis {{ y.last }}</h1>
+<p>Die letzten {{ y.n_months }} abgeschlossenen Monate mit echten Börsenpreisen. Wann war Strom günstig, und was hätte Verschieben gebracht?</p>
+<div class="werte">
+ <div class="wert gut"><span class="titel">Günstigster Monat</span><span class="zahl">{{ y.cheapest.name }}</span><span>Ø {{ y.cheapest.avg|de1 }} ct/kWh</span></div>
+ <div class="wert schlecht"><span class="titel">Teuerster Monat</span><span class="zahl">{{ y.priciest.name }}</span><span>Ø {{ y.priciest.avg|de1 }} ct/kWh</span></div>
+ <div class="wert"><span class="titel">Stunden mit negativem Preis</span><span class="zahl">{{ y.negative_hours }}</span></div>
+ <div class="wert gut"><span class="titel">Haushalt mit E-Auto hätte gespart</span><span class="zahl">{{ y.haushalt_jahr|de2 }} €</span><span>im Schnitt {{ y.haushalt_monat|de2 }} € pro Monat</span></div>
+</div>
+<h2>Monat für Monat</h2>
+<div class="scroll"><table class="tabelle jahr">
+<tr><th>Monat</th><th>Ø Börsenpreis</th><th class="zahl">Vorteil günstige Stunden</th><th class="zahl">Ersparnis Haushalt</th></tr>
+{% for m in y.rows %}<tr><td><a href="{{ root }}monat/{{ m.key }}.html">{{ m.name }}</a></td><td><span class="balken"><span style="width:{{ m.bar }}%"></span></span> {{ m.avg|de1 }} ct</td><td class="zahl">{{ m.spread|de1 }} ct/kWh</td><td class="zahl">{{ m.haushalt|de2 }} €</td></tr>{% endfor %}
 </table></div>
+<p class="leise">„Vorteil günstige Stunden“: Um so viel waren die günstigsten drei Stunden eines Tages im Schnitt billiger als der Tagesdurchschnitt, mit Mehrwertsteuer. Ersparnis für einen Haushalt mit E-Auto an der Wallbox, Waschmaschine und Geschirrspüler, nur mit dynamischem Tarif. Am meisten hat Verschieben im {{ y.best_spread.name }} gebracht.</p>
+{% if y.sommer or y.winter %}
+<h2>Sommer und Winter im Vergleich</h2>
+<p>Wann Strom meistens günstig ist, hängt von der Jahreszeit ab: Im Sommer liefert die Sonne mittags viel Strom. Im Winter scheint sie schwächer, dann bestimmen eher Wind und Nachfrage, welche Stunden günstig sind.</p>
+<div class="werte">
+ {% if y.sommer %}<div class="wert"><span class="titel">Sommerhalbjahr (April bis September)</span><span class="zahl">{{ y.sommer|join(", ") }}</span><span>meist günstig, aus {{ y.n_sommer }} Tagen</span></div>{% endif %}
+ {% if y.winter %}<div class="wert"><span class="titel">Winterhalbjahr (Oktober bis März)</span><span class="zahl">{{ y.winter|join(", ") }}</span><span>meist günstig, aus {{ y.n_winter }} Tagen</span></div>{% endif %}
+</div>
+{% endif %}
+<p>Lohnt sich ein dynamischer Tarif für Sie? Das zeigt der <a href="{{ root }}wechsel-check.html">Wechsel-Check</a>.</p>
+{% endif %}
+{% endblock %}""",
+
+    "morgen.html": """{% extends "base.html" %}
+{% from "macros.html" import warten %}
+{% block body %}
+{% if t %}
+<h1 style="margin-top:1.6rem">Strompreis morgen, {{ t.pretty }}</h1>
+<p class="satz" style="font-size:1.6rem">Morgen am günstigsten: {{ t.windows[3].h_from }} bis {{ t.windows[3].h_to }} Uhr.</p>
+<div class="lage-innen" style="padding:0">
+ {{ t.dial }}
+ <div>
+  <ol class="zeitleiste">{{ t.blocks_html }}</ol>
+  <p class="leise">Insgesamt ist Strom morgen {{ t.niveau.word }} im Schnitt der letzten {{ t.niveau.n }} Tage ({{ t.niveau.avg|de1 }} statt {{ t.niveau.ref|de1 }} Cent pro kWh an der Börse).</p>
+ </div>
+</div>
+{{ warten(t, root, "morgen") }}
+<h2>Wann soll ich morgen welches Gerät einschalten?</h2>
+<div class="scroll"><table class="fahrplan"><tr><th>Gerät</th><th>Beste Zeit morgen</th><th class="zahl">Ersparnis</th></tr>
+{% for v in t.devices %}<tr><td><a href="{{ root }}geraete/{{ v.slug }}.html">{{ v.name }}</a></td><td>{{ v.best.h_from }} bis {{ v.best.h_to }} Uhr</td><td class="zahl">{{ v.save_avg|de2 }} €</td></tr>{% endfor %}</table></div>
+<p class="leise">Ersparnis je Durchlauf gegenüber einer durchschnittlichen Startzeit, mit Mehrwertsteuer. Nur mit dynamischem Tarif.</p>
+<p><a href="{{ root }}tag/{{ t.iso }}.html">Alle Stunden von morgen mit Preisen</a></p>
+{% else %}
+<h1 style="margin-top:1.6rem">Strompreis morgen, {{ morgen_pretty }}</h1>
+<p class="satz" style="font-size:1.5rem">Die Preise für morgen stehen noch nicht fest.</p>
+<p>Die Strombörse legt die Preise für den nächsten Tag jeden Tag um die Mittagszeit fest. Ab etwa 14 Uhr stehen sie hier.</p>
+{% if typisch %}<h2>So war es an {{ wochentag_plural }} meistens</h2>
+<p>In den letzten Wochen war Strom an {{ wochentag_plural }} meistens günstig von <strong>{{ typisch|join(" und von ") }}</strong>. Das ist keine Vorhersage, gibt aber eine gute Orientierung.</p>{% endif %}
+<p>Die genauen Zeiten für heute finden Sie auf der <a href="{{ root }}index.html">Startseite</a>.</p>
+{% endif %}
+<h2>Immer auf dem Laufenden</h2>
+<p>Mit dem <a href="{{ root }}kalender.html">Kalender-Abo</a> erscheinen die günstigen Zeiten von heute und morgen automatisch in Ihrem Kalender.</p>
+{% endblock %}""",
+
+    "kalender.html": """{% extends "base.html" %}
+{% block body %}
+<h1 style="margin-top:1.6rem">Günstige Stunden im eigenen Kalender</h1>
+<p>Abonnieren Sie die Strom-Uhr in Ihrem Kalender. Die günstigen Zeiten von heute und morgen erscheinen dann automatisch als Termine, auf dem Handy und am Computer. Sie müssen sich nirgends anmelden, und wir erfahren nicht, wer abonniert.</p>
+<h2>Welchen Kalender möchten Sie?</h2>
+{% for k in kalender %}
+<section class="kal-abo">
+ <h3>{{ k.titel }}</h3>
+ <p>{{ k.text }}</p>
+ <p><a class="knopf" href="{{ k.webcal }}">In Apple Kalender oder Outlook öffnen</a>
+ <a class="knopf zweit" href="https://calendar.google.com/calendar/r?cid={{ k.webcal|urlencode }}" rel="noopener" target="_blank">In Google Kalender hinzufügen</a></p>
+ <p class="leise">Adresse zum Kopieren: <code>{{ k.url }}</code></p>
+</section>
+{% endfor %}
+<h2>So geht es Schritt für Schritt</h2>
+<h3>iPhone und iPad</h3>
+<ol><li>Tippen Sie auf „In Apple Kalender oder Outlook öffnen“.</li><li>Bestätigen Sie mit „Abonnieren“ und dann „Fertig“.</li></ol>
+<h3>Google Kalender (auch Android)</h3>
+<ol><li>Öffnen Sie diese Seite am Computer und klicken Sie auf „In Google Kalender hinzufügen“.</li><li>Bestätigen Sie mit „Hinzufügen“. Der Kalender erscheint danach auch in der Kalender-App auf Ihrem Android-Handy.</li></ol>
+<h3>Outlook</h3>
+<ol><li>Klicken Sie im Outlook-Kalender auf „Kalender hinzufügen“ und dann „Aus dem Internet abonnieren“.</li><li>Fügen Sie die Adresse zum Kopieren ein und bestätigen Sie.</li></ol>
+<h2>Gut zu wissen</h2>
+<ul>
+<li>Die Preise für morgen erscheinen täglich gegen 14 Uhr. Kalender holen neue Termine aber nur in Abständen ab: Apple und Outlook meist nach einigen Stunden, Google manchmal erst nach einem Tag.</li>
+<li>Termine sind nur Hinweise. Eine Erinnerung stellen Sie bei Bedarf in Ihrer Kalender-App ein.</li>
+<li>Abbestellen geht jederzeit, indem Sie den Kalender in Ihrer App löschen.</li>
+<li>Durch die Uhrzeit sparen Sie nur mit einem dynamischen Stromtarif. Ob sich der lohnt, zeigt der <a href="{{ root }}wechsel-check.html">Wechsel-Check</a>.</li>
+</ul>
 {% endblock %}""",
 
     "wissen_index.html": """{% extends "base.html" %}
@@ -2012,6 +2205,67 @@ def make_og_images(day: dict, built: datetime, today: date, days: list[dict] | N
 
 
 # ----------------------------------------------------------------------------
+# KALENDER-ABO (iCalendar/ICS): günstige Zeiten als Termine, ohne Anmeldung und ohne Tracking
+# ----------------------------------------------------------------------------
+def _ics_text(t: str) -> str:
+    return t.replace("\\", "\\\\").replace(";", "\\;").replace(",", "\\,").replace("\n", "\\n")
+
+
+def _ics_fold(line: str) -> str:
+    """Zeilen nach RFC 5545 auf höchstens 75 Bytes falten."""
+    out, cur = [], b""
+    for ch in line:
+        b = ch.encode("utf-8")
+        if len(cur) + len(b) > (75 if not out else 74):
+            out.append(cur.decode("utf-8"))
+            cur = b""
+        cur += b
+    out.append(cur.decode("utf-8"))
+    return "\r\n ".join(out)
+
+
+def _ics_time(ts: float) -> str:
+    return datetime.fromtimestamp(ts, ZoneInfo("UTC")).strftime("%Y%m%dT%H%M%SZ")
+
+
+def make_ics(days: list[dict], built: datetime, mode: str) -> str:
+    """mode 'alle': jede grüne Phase eines Tages; mode 'beste': die günstigsten drei Stunden am Stück."""
+    name = "Strom-Uhr: günstige Stunden" if mode == "alle" else "Strom-Uhr: beste Zeit des Tages"
+    lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Strom-Uhr//Kalender//DE", "CALSCALE:GREGORIAN",
+             "METHOD:PUBLISH", f"X-WR-CALNAME:{_ics_text(name)}", "X-WR-TIMEZONE:Europe/Berlin",
+             "REFRESH-INTERVAL;VALUE=DURATION:PT4H", "X-PUBLISHED-TTL:PT4H"]
+    stamp = _ics_time(built.timestamp())
+    for a in days:
+        hrs = a["hours"]
+        spans = []
+        if mode == "alle":
+            cur = None
+            for h in hrs:
+                if h["lvl"] == "g":
+                    cur = [h, h] if cur is None else [cur[0], h]
+                elif cur:
+                    spans.append(cur); cur = None
+            if cur:
+                spans.append(cur)
+        else:
+            i0, i1 = a["windows"][3]["idx"]
+            spans.append([hrs[i0], hrs[i1 - 1]])
+        for first, last in spans:
+            part = [h for h in hrs if first["t"] <= h["t"] <= last["t"]]
+            avg = statistics.mean(h["ct"] for h in part)
+            title = "Strom günstig" if mode == "alle" else "Beste Zeit für große Geräte"
+            desc = (f"Börsenpreis im Schnitt {de1(avg)} Cent pro kWh (ohne Netzentgelte und Steuern). "
+                    f"{a['warten']['kurz'].replace('{wann}', 'an diesem Tag')} "
+                    f"Nur mit dynamischem Stromtarif sparen Sie durch die Uhrzeit. Mehr: {SITE_URL}/tag/{a['iso']}.html")
+            lines += ["BEGIN:VEVENT", f"UID:{int(first['t'])}-{mode}@strom-uhr", f"DTSTAMP:{stamp}",
+                      f"DTSTART:{_ics_time(first['t'])}", f"DTEND:{_ics_time(last['t'] + 3600)}",
+                      f"SUMMARY:{_ics_text(title)}", f"DESCRIPTION:{_ics_text(desc)}",
+                      f"URL:{SITE_URL}/tag/{a['iso']}.html", "TRANSP:TRANSPARENT", "END:VEVENT"]
+    lines.append("END:VCALENDAR")
+    return "\r\n".join(_ics_fold(l) for l in lines) + "\r\n"
+
+
+# ----------------------------------------------------------------------------
 # 9. RENDER / PUBLISH / MAIN
 # ----------------------------------------------------------------------------
 def ensure_fonts() -> None:
@@ -2210,6 +2464,37 @@ def render_site(analysed: list[dict], thr: dict, stats: dict, built: datetime) -
          canon="monat/index.html", title="Monatsrückblicke: Was hätte Verschieben gebracht?",
          description="Jeden Monat nachgerechnet: Wie viel billiger waren die günstigen Stunden, "
                      "und was hätte ein Haushalt mit E-Auto gespart?")
+    year = compute_year(days, months, today)
+    emit("jahresrueckblick.html", "year.html", y=year, nav="statistik", canon="jahresrueckblick.html",
+             title=(f"Strompreis-Jahresrückblick {year['first']} bis {year['last']}" if year
+                    else "Strompreis-Jahresrückblick"),
+             description="Zwölf Monate Börsenstrompreis: günstigster und teuerster Monat, Sommer gegen Winter "
+                         "und was ein Haushalt mit E-Auto durch Verschieben gespart hätte.")
+    # Strompreis morgen
+    morgen = today + timedelta(days=1)
+    plan = compute_week_plan(days, today)
+    row = plan["rows"][morgen.weekday()]
+    emit("strompreis-morgen.html", "morgen.html", t=tomorrow_a, morgen_pretty=de_date(morgen),
+         typisch=row["gruen"] if row["n_days"] >= 3 else None,
+         wochentag_plural=WEEKDAYS[morgen.weekday()] + "en", nav="heute", canon="strompreis-morgen.html",
+         title=f"Strompreis morgen ({morgen.day:02d}.{morgen.month:02d}.): Wann ist Strom morgen günstig?",
+         description="Börsenstrompreis für morgen: die günstigsten Stunden, ob sich Warten lohnt und wann "
+                     "Waschmaschine oder E-Auto am besten laufen. Neue Preise täglich ab etwa 14 Uhr.")
+    # Kalender-Abo
+    kal_days = [a for a in days if a["date"] >= today - timedelta(days=3)]
+    write(OUT_DIR / "kalender" / "guenstige-stunden.ics", make_ics(kal_days, built, "alle"))
+    write(OUT_DIR / "kalender" / "beste-zeit.ics", make_ics(kal_days, built, "beste"))
+    host = SITE_URL.split("://", 1)[1]
+    kalender = [
+        {"titel": "Nur die beste Zeit des Tages", "text": "Ein Termin pro Tag: die günstigsten drei Stunden am Stück. Gut für Waschmaschine, Geschirrspüler und E-Auto. Empfohlen für die meisten.",
+         "url": f"{SITE_URL}/kalender/beste-zeit.ics", "webcal": f"webcal://{host}/kalender/beste-zeit.ics"},
+        {"titel": "Alle günstigen Stunden", "text": "Jede grüne Phase des Tages als eigener Termin. Gut, wenn Sie mehrere Geräte über den Tag verteilen.",
+         "url": f"{SITE_URL}/kalender/guenstige-stunden.ics", "webcal": f"webcal://{host}/kalender/guenstige-stunden.ics"},
+    ]
+    emit("kalender.html", "kalender.html", kalender=kalender, nav="heute", canon="kalender.html",
+         title="Günstige Strom-Zeiten im Kalender abonnieren",
+         description="Die günstigen Stunden von heute und morgen automatisch im Google-, Apple- oder Outlook-Kalender. "
+                     "Ohne Anmeldung, ohne Tracking.")
     for m in months:
         emit(f"monat/{m['key']}.html", "month.html", m=m, root="../", nav="statistik", canon=f"monat/{m['key']}.html",
              show_affiliate=True,
@@ -2225,7 +2510,15 @@ def render_site(analysed: list[dict], thr: dict, stats: dict, built: datetime) -
     emit("statistik.html", "stats.html", calendar=calendar_html(list(reversed(days))[:STATS_DAYS]),
          nav="statistik", canon="statistik.html", title="Strom-Statistik: Beste Uhrzeit und bester Wochentag",
          description="Wann ist Strom meistens günstig? Strom-Kalender, beste Uhrzeit und Wochentags-Statistik.")
-    emit("archiv.html", "archive.html", days=list(reversed(days))[:ARCHIVE_MAX], nav="heute",
+    groups = []
+    for a in reversed(days):
+        key = a["date"].strftime("%Y-%m")
+        if not groups or groups[-1]["key"] != key:
+            groups.append({"key": key, "name": f"{MONTHS[a['date'].month - 1]} {a['date'].year}", "days": []})
+        groups[-1]["days"].append(a)
+    for g in groups:
+        g["days"].reverse()
+    emit("archiv.html", "archive.html", groups=groups, month_keys={m["key"] for m in months}, nav="heute",
          canon="archiv.html", title="Archiv: Strompreise der letzten Tage",
          description="Alle ausgewerteten Tage mit Durchschnittspreis und günstigsten Stunden.")
 
@@ -2304,7 +2597,9 @@ def publish() -> None:
 def run(push: bool) -> int:
     built = datetime.now(TZ)
     today = built.date()
-    wanted = {today + timedelta(days=1), today} | {today - timedelta(days=i) for i in range(1, BACKFILL_DAYS + 1)}
+    # ältere Tage monatsweise nachladen (einmalig), die letzten Tage, heute und morgen einzeln
+    backfill_history(today - timedelta(days=HISTORY_DAYS), today - timedelta(days=RECENT_DAYS + 1))
+    wanted = {today + timedelta(days=1), today} | {today - timedelta(days=i) for i in range(1, RECENT_DAYS + 1)}
     cached = {date.fromisoformat(p.stem) for p in DATA_DIR.glob("*.json")} if DATA_DIR.exists() else set()
 
     day_hours: dict[date, list[dict]] = {}
