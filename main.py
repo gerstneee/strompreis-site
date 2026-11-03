@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """
 Strom-Uhr: erzeugt täglich eine statische, besonders leicht lesbare Website
-mit den deutschen Day-Ahead-Strompreisen (Gebotszone DE-LU) und veröffentlicht sie
-per git push (GitHub Pages oder Cloudflare Pages).
+mit den deutschen Day-Ahead-Strompreisen (Gebotszone DE-LU) im Ordner docs/.
+Veröffentlicht wird sie von GitHub Actions über GitHub Pages (siehe .github/workflows/strom-uhr.yml).
 
 Datenquelle : Energy-Charts API (Fraunhofer ISE), Daten: Bundesnetzagentur | SMARD.de, CC BY 4.0
               -> Quellenangabe ist Pflicht (steht im Footer, siehe FOOTER_SOURCE).
-Abhängigk.  : pip install requests jinja2 tzdata   (Python >= 3.11)
-Start       : python main.py [--no-push]
+Abhängigk.  : pip install requests jinja2 tzdata pillow   (Python >= 3.11)
+Start       : python main.py --no-push      Prüfung: python test_main.py
 
 Seiten, die erzeugt werden (Ordner docs/):
   index.html                24-h-Uhr mit Zeiger auf "jetzt" + Tagesplan heute/morgen + Geräte-Fahrplan
@@ -35,7 +35,6 @@ import math
 import os
 import shutil
 import statistics
-import subprocess
 import sys
 import time
 from datetime import date, datetime, timedelta
@@ -69,19 +68,8 @@ MWST = 1.19
 DEFAULT_AUFSCHLAG = 18.0  # Beispielwert in ct/kWh netto (Netzentgelte + Steuern + Umlagen + Anbieter)
 
 # Schrift: Atkinson Hyperlegible (SIL Open Font License 1.1), entwickelt vom Braille Institute
-# für gute Lesbarkeit. Wird beim ersten Lauf EINMALIG heruntergeladen und danach selbst gehostet
-# (kein Abruf bei Google durch Besucher -> datenschutzfreundlich). Klappt der Download nicht,
-# nutzt die Seite automatisch Verdana / Systemschrift.
-FONT_FILES = {
-    "atkinson-400.woff2": [
-        "https://cdn.jsdelivr.net/fontsource/fonts/atkinson-hyperlegible@latest/latin-400-normal.woff2",
-        "https://cdn.jsdelivr.net/npm/@fontsource/atkinson-hyperlegible/files/atkinson-hyperlegible-latin-400-normal.woff2",
-    ],
-    "atkinson-700.woff2": [
-        "https://cdn.jsdelivr.net/fontsource/fonts/atkinson-hyperlegible@latest/latin-700-normal.woff2",
-        "https://cdn.jsdelivr.net/npm/@fontsource/atkinson-hyperlegible/files/atkinson-hyperlegible-latin-700-normal.woff2",
-    ],
-}
+# für gute Lesbarkeit. Liegt in data/fonts/ und wird selbst gehostet (kein Abruf bei Google
+# durch Besucher -> datenschutzfreundlich). Fehlt sie, nutzt die Seite Verdana / Systemschrift.
 
 # Google Search Console: nur den content-Wert aus dem HTML-Tag eintragen, z. B. "AbC123...".
 # Leer lassen = kein Tag. Der Tag ist ein reiner Eigentumsnachweis, er überträgt keine Besucherdaten.
@@ -98,7 +86,6 @@ AFFILIATE = {
     "smart_meter": {"label": "Energiemonitor für den Zähler ansehen", "url": ""},
 }
 
-# Geräte: kwh = Verbrauch pro Durchlauf, hours = Laufzeit in ganzen Stunden, per_week = Beispielnutzung
 # Geräte: kwh = Verbrauch pro Durchlauf, hours = Laufzeit in ganzen Stunden, per_week = Beispielnutzung,
 # tipps = gerätespezifische Hinweise (Klartext), link = optionaler Verweis auf eine Erklärseite
 DEVICES = [
@@ -483,7 +470,17 @@ def niveau_of(avg: float, ref: float, n_days: int) -> dict:
     return {"word": word, "avg": avg, "ref": ref, "n": n_days}
 
 
-def analyse_day(d: date, hrs: list[dict], thr: dict) -> dict:
+def add_niveau(analysed: list[dict], stats: dict) -> None:
+    """Vergleicht jeden Tag mit den STATS_DAYS Tagen davor (nicht mit den letzten Tagen ab heute),
+    damit alte Tagesseiten richtig und unverändert bleiben."""
+    avgs = {a["date"]: a["avg"] for a in analysed}
+    for a in analysed:
+        prev = [v for d, v in avgs.items() if a["date"] - timedelta(days=STATS_DAYS) <= d < a["date"]]
+        a["niveau"] = (niveau_of(a["avg"], statistics.mean(prev), len(prev)) if prev
+                       else niveau_of(a["avg"], stats["avg"], stats["n_days"]))
+
+
+def analyse_day(d: date, hrs: list[dict]) -> dict:
     day_levels(hrs)
     avg = statistics.mean(h["ct"] for h in hrs)
     green = sum(1 for h in hrs if h["lvl"] == "g")
@@ -1559,7 +1556,7 @@ TEMPLATES = {
    <p id="jetzt-next"></p>
    <p id="jetzt-beste"></p>
    <p class="leise" id="jetzt-preis"></p>
-   <p class="leise">Insgesamt ist Strom {{ "heute" if ref_warten_titel == "heute" else ref_warten_titel }} {{ ref_day.niveau.word }} im Schnitt der letzten {{ ref_day.niveau.n }} Tage: {{ ref_day.niveau.avg|de1 }} statt {{ ref_day.niveau.ref|de1 }} Cent pro kWh an der Börse. Die Farben der Uhr vergleichen die Stunden dieses Tages.</p>
+   <p class="leise">Insgesamt ist Strom {{ ref_label }} {{ ref_day.niveau.word }} im Schnitt der letzten {{ ref_day.niveau.n }} Tage: {{ ref_day.niveau.avg|de1 }} statt {{ ref_day.niveau.ref|de1 }} Cent pro kWh an der Börse. Die Farben der Uhr vergleichen die Stunden dieses Tages.</p>
   </div>
  </div>
 </section>
@@ -1575,7 +1572,7 @@ TEMPLATES = {
   <li><strong>Sie haben einen festen Tarif?</strong> Dann ändert die Uhrzeit nichts an Ihrer Rechnung. Grüne Stunden sind aber oft Stunden mit viel Wind- und Sonnenstrom. <a href="{{ root }}wissen/guenstiger-strom-gruener-strom.html">Warum das so ist</a></li>
  </ul>
 </section>
-{{ warten(ref_day, root, ref_warten_titel) }}
+{{ warten(ref_day, root, ref_label) }}
 {% if tomorrow_day and tomorrow_day.iso != ref_day.iso %}<p class="warten-morgen"><strong>Und morgen?</strong> {{ tomorrow_day.warten.kurz.replace("{wann}", "morgen") }} Unterschied: {{ tomorrow_day.warten.diff|de1 }} Cent pro kWh. <a href="{{ root }}strompreis-morgen.html">Strompreis morgen</a></p>{% endif %}
 <div class="tage" id="tagesplan">
 {% for d, titel in shown %}{{ plan(d, root, titel) }}{% endfor %}
@@ -2124,7 +2121,7 @@ ENV.filters["de1"] = de1
 ENV.filters["de2"] = de2
 
 # ----------------------------------------------------------------------------
-# 8. ERKLÄRSEITEN (einfache Sprache; Variablen: root, thr, stats)
+# 8. ERKLÄRSEITEN (einfache Sprache; Variablen: root, stats)
 # ----------------------------------------------------------------------------
 WISSEN = [
     {"slug": "dynamischer-stromtarif", "title": "Was ist ein dynamischer Stromtarif?",
@@ -2474,27 +2471,15 @@ def make_ics(days: list[dict], built: datetime, mode: str) -> str:
 # 9. RENDER / PUBLISH / MAIN
 # ----------------------------------------------------------------------------
 def ensure_fonts() -> None:
-    """Lädt die Schriftdateien einmalig nach data/fonts/ und kopiert sie nach docs/assets/fonts/."""
-    store = DATA_DIR / "fonts"
-    store.mkdir(parents=True, exist_ok=True)
-    for name, urls in FONT_FILES.items():
-        target = store / name
-        if not (target.exists() and target.stat().st_size > 1000):
-            for url in urls:
-                try:
-                    r = requests.get(url, timeout=30, headers={"User-Agent": USER_AGENT})
-                    if r.ok and r.content[:4] == b"wOF2":
-                        target.write_bytes(r.content)
-                        log.info("Schrift %s geladen", name)
-                        break
-                except requests.RequestException as exc:
-                    log.warning("Schrift %s nicht ladbar (%s)", name, exc)
-            else:
-                log.warning("Schrift %s nicht verfügbar – Seite nutzt Ersatzschrift", name)
-                continue
+    """Kopiert die Schriftdateien aus data/fonts/ (liegen im Repository) nach docs/assets/fonts/."""
+    for name in ("atkinson-400.woff2", "atkinson-700.woff2"):
+        src = DATA_DIR / "fonts" / name
+        if not src.exists():
+            log.warning("Schrift %s fehlt in data/fonts – Seite nutzt Ersatzschrift", name)
+            continue
         out = OUT_DIR / "assets" / "fonts" / name
         out.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(target, out)
+        shutil.copyfile(src, out)
 
 
 def affiliate_list() -> list[dict]:
@@ -2506,7 +2491,7 @@ def write(path: Path, content: str) -> None:
     path.write_text(content, encoding="utf-8")
 
 
-def build_data_json(analysed: list[dict], thr: dict, stats: dict, today: date, built: datetime) -> Markup:
+def build_data_json(analysed: list[dict], stats: dict, today: date, built: datetime) -> Markup:
     days = {}
     for a in analysed:
         if a["date"] >= today - timedelta(days=1):
@@ -2514,7 +2499,6 @@ def build_data_json(analysed: list[dict], thr: dict, stats: dict, today: date, b
     data = {
         "built": built.isoformat(timespec="minutes"),
         "mwst": MWST, "aufschlag": DEFAULT_AUFSCHLAG,
-        "thr": {"low": round(thr["low"], 3), "high": round(thr["high"], 3)},
         "days": days,
         "stats": {"avg": round(stats["avg"], 3), "best4": round(stats["best4"], 3), "n": stats["n_days"]},
         "affiliate": {"url": AFFILIATE["dyn_tarif"]["url"], "label": AFFILIATE["dyn_tarif"]["label"]}
@@ -2526,7 +2510,7 @@ def build_data_json(analysed: list[dict], thr: dict, stats: dict, today: date, b
     return Markup(raw.replace("</", "<\\/"))
 
 
-def render_site(analysed: list[dict], thr: dict, stats: dict, built: datetime) -> int:
+def render_site(analysed: list[dict], stats: dict, built: datetime) -> int:
     today = built.date()
     days = sorted(analysed, key=lambda a: a["date"])
     by_date = {a["date"]: a for a in days}
@@ -2546,7 +2530,7 @@ def render_site(analysed: list[dict], thr: dict, stats: dict, built: datetime) -
         og=og,
         site_name=SITE_NAME, site_url=SITE_URL, source=FOOTER_SOURCE, affiliate=affiliate_list(),
         built_text=f"Stand: {built:%d.%m.%Y, %H:%M} Uhr.", data_json=None, show_affiliate=False,
-        nav="", canon="", title="", description="", root="", thr=thr, stats=stats,
+        nav="", canon="", title="", description="", root="", stats=stats,
         warten_stark=WARTEN_STARK, warten_etwas=WARTEN_ETWAS, google_verification=GOOGLE_VERIFICATION,
     )
     pages: list[str] = []
@@ -2612,14 +2596,12 @@ def render_site(analysed: list[dict], thr: dict, stats: dict, built: datetime) -
          "oder Speicher eher ja, sonst bringt es oft nur wenige Euro im Jahr. Der Wechsel-Check der Strom-Uhr gibt "
          "in sechs Fragen eine Einschätzung."),
     ]
-    data_json = build_data_json(days, thr, stats, today, built)
+    data_json = build_data_json(days, stats, today, built)
 
     # Startseite
     emit("index.html", "index.html", shown=[(a, day_title(a)) for a in shown], has_tomorrow=has_tomorrow,
          has_today=today_a is not None, today_dial=ref_day["dial_live"],
          ref_day=ref_day, tomorrow_day=tomorrow_a,
-         ref_warten_titel="heute" if ref_day["date"] == today else f'am {ref_day["short"]}',
-
          ref_devices=ref_day["devices"], ref_label=ref_label, faq=faq,
          data_json=data_json, nav="heute", canon="index.html",
          title="Strompreis heute: Wann ist Strom günstig?",
@@ -2720,7 +2702,7 @@ def render_site(analysed: list[dict], thr: dict, stats: dict, built: datetime) -
              title=f"Strompreis im {m['name']}: Rückblick und Spar-Bilanz",
              description=f"Strompreis im {m['name']}: Durchschnitt {de1(m['avg'])} ct/kWh, günstige Stunden "
                          f"{de1(m['spread'])} ct billiger. Was Verschieben gebracht hätte.")
-    emit("wochenplan.html", "wochenplan.html", plan=compute_week_plan(days, today),
+    emit("wochenplan.html", "wochenplan.html", plan=plan,
          plan_today=[(a, day_title(a), "heute" if a["date"] == today else "morgen") for a in shown if a["date"] >= today],
          built_date=f"{built:%d.%m.%Y}", nav="statistik", canon="wochenplan.html",
          title="Kühlschrank-Plan: Wann ist Strom meistens günstig?",
@@ -2746,7 +2728,7 @@ def render_site(analysed: list[dict], thr: dict, stats: dict, built: datetime) -
          canon="wissen/index.html", title="Strom einfach erklärt",
          description="Dynamischer Tarif, Börsenpreis, § 14a, Strom-Uhr und negative Strompreise in einfacher Sprache.")
     for w in WISSEN:
-        body = Markup(ENV.from_string(w["body"]).render(root="../", thr=thr, stats=stats,
+        body = Markup(ENV.from_string(w["body"]).render(root="../", stats=stats,
                                                        warten_stark=WARTEN_STARK, warten_etwas=WARTEN_ETWAS))
         emit(f"wissen/{w['slug']}.html", "wissen_page.html", w=w, body=body, root="../", nav="wissen",
              canon=f"wissen/{w['slug']}.html", show_affiliate=w["slug"] in ("dynamischer-stromtarif", "lohnt-sich-dynamischer-tarif"),
@@ -2788,7 +2770,9 @@ def render_site(analysed: list[dict], thr: dict, stats: dict, built: datetime) -
     write(OUT_DIR / "assets" / "style.css", CSS.strip() + "\n")
     write(OUT_DIR / "assets" / "app.js", JS.strip() + "\n")
     now_s = today.isoformat()
-    urls = "".join(f"<url><loc>{SITE_URL}/{'' if p == 'index.html' else p}</loc><lastmod>{now_s}</lastmod></url>"
+    # Tagesseiten ändern sich nach ihrem Tag nicht mehr: echtes Datum statt immer "heute" (sonst ignoriert Google lastmod)
+    urls = "".join(f"<url><loc>{SITE_URL}/{'' if p == 'index.html' else p}</loc>"
+                   f"<lastmod>{min(p[4:14], now_s) if p.startswith('tag/') else now_s}</lastmod></url>"
                    for p in pages_for_sitemap)
     write(OUT_DIR / "sitemap.xml",
           f'<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">{urls}</urlset>')
@@ -2807,28 +2791,7 @@ def render_site(analysed: list[dict], thr: dict, stats: dict, built: datetime) -
     return len(pages)
 
 
-def git(*args: str) -> subprocess.CompletedProcess:
-    flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)   # Windows: kein aufblitzendes Konsolenfenster
-    return subprocess.run(["git", *args], cwd=BASE_DIR, capture_output=True, text=True, timeout=120,
-                          creationflags=flags)
-
-
-def publish() -> None:
-    if not shutil.which("git"):
-        raise RuntimeError("git nicht gefunden")
-    git("add", "-A")
-    if not git("status", "--porcelain").stdout.strip():
-        log.info("Keine Änderungen – kein Push")
-        return
-    msg = f"Update {datetime.now(TZ):%Y-%m-%d %H:%M}"
-    for step in (("commit", "-m", msg), ("pull", "--rebase", "--autostash"), ("push",)):
-        res = git(*step)
-        if res.returncode != 0:
-            raise RuntimeError(f"git {step[0]} fehlgeschlagen: {res.stderr.strip()}")
-    log.info("Veröffentlicht: %s", msg)
-
-
-def run(push: bool) -> int:
+def run() -> int:
     built = datetime.now(TZ)
     today = built.date()
     # ältere Tage monatsweise nachladen (einmalig), die letzten Tage, heute und morgen einzeln
@@ -2848,26 +2811,24 @@ def run(push: bool) -> int:
         return 2
 
     thr = compute_thresholds(day_hours, today)
-    analysed = [analyse_day(d, hrs, thr) for d, hrs in sorted(day_hours.items())]
+    analysed = [analyse_day(d, hrs) for d, hrs in sorted(day_hours.items())]
     stats = compute_stats(analysed, thr, today)
-    for a in analysed:
-        a["niveau"] = niveau_of(a["avg"], stats["avg"], stats["n_days"])
-    render_site(analysed, thr, stats, built)
-    if push:
-        publish()
+    add_niveau(analysed, stats)
+    render_site(analysed, stats, built)
     return 0
 
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--no-push", action="store_true", help="nur lokal erzeugen")
-    args = ap.parse_args()
+    # Hochladen übernehmen einrichten.ps1 und GitHub Actions; --no-push bleibt nur erlaubt, damit alte Aufrufe weiter gehen
+    ap.add_argument("--no-push", action="store_true", help="ohne Wirkung, das Skript lädt nie selbst hoch")
+    ap.parse_args()
     setup_logging()
     if not acquire_lock():
         log.warning("Anderer Lauf aktiv – beende")
         return 0
     try:
-        return run(push=not args.no_push)
+        return run()
     except Exception:  # noqa: BLE001 – letzte Verteidigungslinie, alles ins Log
         log.exception("Unerwarteter Fehler")
         return 1
