@@ -170,6 +170,59 @@ def short_date(d: date) -> str:
     return f"{WD_SHORT[d.weekday()]} {d.day:02d}.{d.month:02d}."
 
 
+# Anbieterübersicht dynamischer Tarife. Bewusst ohne Cent-Beträge (ändern sich zu oft).
+# Jede Angabe mit Quelle. ANBIETER_STAND bei jeder Überprüfung aktualisieren; nach 90 Tagen
+# erscheint eine Warnung im Log und ein sichtbarer Hinweis auf der Seite.
+# affiliate_url erst eintragen, wenn das Partnerprogramm angenommen hat (wird dann als Werbung gekennzeichnet).
+ANBIETER_STAND = date(2026, 11, 3)
+ANBIETER = [
+    {"name": "Tibber", "url": "https://tibber.com/de", "affiliate_url": "",
+     "fuer": "Haushalte mit Smart Meter, die ihren Verbrauch per App steuern möchten",
+     "ohne_sm": "ja, aber dann Abrechnung zum Monatsdurchschnitt",
+     "kuendigung": "monatlich kündbar",
+     "fakten": ["Gibt den Börsenpreis laut Vergleichsportal ohne eigenen Aufschlag weiter. Dazu kommen Abgaben, Umlagen, Netzentgelte und eine monatliche Grundgebühr.",
+                "Mit Smart Meter ändert sich der Preis stündlich.",
+                "Ohne Smart Meter wird ein monatlicher Durchschnittspreis berechnet. Verschieben senkt Ihre Rechnung dann nicht."],
+     "quellen": [("Stromauskunft: Tibber", "https://www.stromauskunft.de/de/stromanbieter/tibber.html")]},
+    {"name": "Ostrom (SimplyDynamic)", "url": "https://www.ostrom.de", "affiliate_url": "",
+     "fuer": "Haushalte mit Smart Meter, die niedrige Gebühren suchen",
+     "ohne_sm": "nein, dann gilt ein fester Tarif (SimplyFair)",
+     "kuendigung": "höchstens ein Monat Mindestlaufzeit (laut Finanztip)",
+     "fakten": ["Der Verbrauch wird stündlich zum Börsenpreis abgerechnet.",
+                "Voraussetzung ist ein intelligentes Messsystem mit zertifiziertem Smart-Meter-Gateway. Ohne passenden Zähler stellt Ostrom auf den festen Tarif SimplyFair um, bis die Voraussetzungen erfüllt sind.",
+                "Von Finanztip im September 2025 wegen seiner Gebühren empfohlen."],
+     "quellen": [("Ostrom-Hilfe: SimplyDynamic", "https://support.ostrom.de/en/articles/8100429-what-s-the-dynamic-simplydynamic-tariff"),
+                 ("Ostrom-Hilfe: ohne Smart Meter", "https://support.ostrom.de/en/articles/8238729-i-signed-up-for-the-dynamic-tariff-but-i-am-not-sure-if-i-have-a-smart-meter-what-happens-next"),
+                 ("Finanztip: Stromtarif ohne Festpreis", "https://finanztip.de/daily/stromtarif-ohne-festpreis-hunderte-euro-sparen-oder-risiko/")]},
+    {"name": "Octopus Energy (dynamicOctopus)", "url": "https://octopusenergy.de", "affiliate_url": "",
+     "fuer": "Haushalte mit Smart Meter; eigene Tarife für E-Auto und Wärmepumpe",
+     "ohne_sm": "nein",
+     "kuendigung": "höchstens ein Monat Mindestlaufzeit (laut Finanztip)",
+     "fakten": ["Stündliche Preise auf Basis des Börsenpreises.",
+                "Laut Bericht übernimmt Octopus die Einbaukosten des Smart Meters für Kunden seiner Smart-Tarife.",
+                "Zusätzlich gibt es Tarife speziell für E-Autos (Intelligent Octopus) und Wärmepumpen (Octopus Heat).",
+                "Von Finanztip im September 2025 wegen seiner Gebühren empfohlen."],
+     "quellen": [("Basic Thinking: 7 Dinge über dynamische Stromtarife (06/2026)", "https://www.basicthinking.de/blog/2026/06/05/7-dinge-die-du-ueber-dynamische-stromtarife-wissen-solltest/"),
+                 ("Finanztip: Stromtarif ohne Festpreis", "https://finanztip.de/daily/stromtarif-ohne-festpreis-hunderte-euro-sparen-oder-risiko/")]},
+    {"name": "Rabot Energy", "url": "https://www.rabot.energy", "affiliate_url": "",
+     "fuer": "Haushalte, die schon ohne Smart Meter an den Börsenpreis wollen",
+     "ohne_sm": "ja, dann Abrechnung nach Standardlastprofil",
+     "kuendigung": "monatlich kündbar",
+     "fakten": ["Kauft den Strom am Day-Ahead-Markt und gibt den Börsenpreis weiter.",
+                "Ohne Smart Meter wird nach einem Standardlastprofil für Ihre Region abgerechnet. Ihr tatsächlicher Stundenverbrauch ist dann nicht bekannt, Verschieben senkt Ihre Rechnung nicht.",
+                "Das Preisrisiko tragen bei diesem Modell die Kunden."],
+     "quellen": [("ZfK-Interview mit Rabot Energy (12/2024)", "https://www.zfk.de/digitalisierung/smart-city-energy/unsere-kunden-sparen-bei-dynamischen-tarifen-bis-zu-40-prozent-auch-ohne-intelligentes-messsystem")]},
+    {"name": "1KOMMA5° (Dynamic Pulse)", "url": "https://1komma5.com/de/", "affiliate_url": "",
+     "fuer": "vor allem Haushalte mit Solaranlage oder Wärmepumpe und dem Energiemanager des Anbieters",
+     "ohne_sm": "keine klare Angabe",
+     "kuendigung": "keine klare Angabe",
+     "fakten": ["Wird zusammen mit dem Energiemanager „Heartbeat“ angeboten, der Solaranlage, Wärmepumpe, Speicher und Wallbox steuert.",
+                "Die Voraussetzungen nennt der Anbieter auf seiner Seite nicht klar. In einem Test von homeandsmart (06/2026) gab es ohne Solaranlage oder Wärmepumpe kein Angebot."],
+     "quellen": [("1KOMMA5°", "https://1komma5.com/de/"),
+                 ("homeandsmart: Dynamische Stromtarife im Vergleich", "https://www.homeandsmart.de/dynamische-stromtarife-268685")]},
+]
+
+
 # ----------------------------------------------------------------------------
 # 2. LOGGING / LOCK
 # ----------------------------------------------------------------------------
@@ -934,6 +987,16 @@ ul.tage-liste a:hover{border-color:var(--blau)}
 .kal-abo .knopf.zweit{margin-left:0}
 code{font-size:.85em;background:var(--flaeche);padding:.1rem .3rem;border-radius:3px;overflow-wrap:anywhere}
 
+/* Einbinde-Seite */
+.code-feld{width:100%;font-family:ui-monospace,Consolas,monospace;font-size:.8rem;line-height:1.4;padding:.6rem;border:2px solid #9aa7b1;border-radius:6px;background:var(--flaeche);color:var(--tinte);resize:vertical}
+.kopiert{color:var(--gruen-text);font-weight:700;margin-left:.4rem}
+
+/* Anbieterübersicht */
+ol.kriterien li{margin:.5rem 0}
+.anbieter{border-left:6px solid var(--blau);padding:.1rem 0 .1rem 1rem;margin:1.6rem 0}
+.anbieter h2{margin:.2rem 0 .4rem}
+.anbieter-tabelle td{font-size:.95rem}
+
 /* Kühlschrank-Plan */
 .woche{min-width:30rem;margin:.6rem 0}
 .w-kopf,.w-zeile{display:grid;grid-template-columns:2.6em repeat(24,minmax(0,1fr));gap:2px;align-items:center}
@@ -1331,7 +1394,7 @@ JS = r'''
         html += '<li>Klären Sie, welchen Zähler Sie haben: Das steht auf Ihrer Stromrechnung, oder Sie fragen Ihren Messstellenbetreiber.</li>';
       }
       if (klasse !== 'nein') {
-        html += '<li>Vergleichen Sie Angebote: Arbeitspreis-Aufschlag, Grundpreis und Kosten der Messstelle. Im <a href="tarifvergleich.html">Tarifvergleich</a> rechnen Sie mit Ihren Zahlen nach.</li>';
+        html += '<li>Vergleichen Sie Angebote: Arbeitspreis-Aufschlag, Grundpreis und Kosten der Messstelle. Die <a href="dynamische-stromtarife-anbieter.html">Anbieterübersicht</a> zeigt die Unterschiede, im <a href="tarifvergleich.html">Tarifvergleich</a> rechnen Sie mit Ihren Zahlen nach.</li>';
       } else {
         html += '<li>Prüfen Sie lieber, ob Ihr fester Tarif noch günstig ist. Ein Anbieterwechsel bringt oft mehr als die Uhrzeit.</li>';
       }
@@ -1374,12 +1437,30 @@ JS = r'''
     });
   }
 
+  function initCopy() {
+    var btns = document.querySelectorAll('[data-copy]');
+    for (var i = 0; i < btns.length; i++) {
+      btns[i].addEventListener('click', function () {
+        var feld = document.getElementById(this.getAttribute('data-copy'));
+        var info = this.parentNode.querySelector('.kopiert');
+        function ok() { if (info) { info.textContent = 'Kopiert. Jetzt in Ihre Seite einfügen.'; } }
+        function fallback() {
+          feld.focus(); feld.select();
+          try { document.execCommand('copy'); ok(); } catch (e) { if (info) { info.textContent = 'Bitte den markierten Text mit Strg+C kopieren.'; } }
+        }
+        if (navigator.clipboard && window.isSecureContext) {
+          navigator.clipboard.writeText(feld.value).then(ok, fallback);
+        } else { fallback(); }
+      });
+    }
+  }
+
   function initPrint() {
     var pr = document.querySelectorAll('[data-print]');
     for (var j = 0; j < pr.length; j++) { pr[j].addEventListener('click', function () { window.print(); }); }
   }
 
-  [initMenue, markNow, initHero, initLiveDevices, initRechner, initTarif, initCheck, initPrint].forEach(function (fn) {
+  [initMenue, initCopy, markNow, initHero, initLiveDevices, initRechner, initTarif, initCheck, initPrint].forEach(function (fn) {
     try { fn(); } catch (e) { if (window.console) { console.error(e); } }
   });
 })();
@@ -1441,7 +1522,7 @@ TEMPLATES = {
  <div class="wrap">
   <p>{{ source }}</p>
   <p>Alle Preise sind Börsenpreise (Day-Ahead) ohne Netzentgelte, Steuern, Umlagen und Aufschläge der Anbieter. Das ist keine Tarif- oder Anlageberatung. Angaben ohne Gewähr. {{ built_text }}</p>
-  <nav class="fuss-nav" aria-label="Weitere Seiten"><a href="{{ root }}strompreis-morgen.html">Strompreis morgen</a><a href="{{ root }}kalender.html">Kalender-Abo</a><a href="{{ root }}wochenplan.html">Kühlschrank-Plan</a><a href="{{ root }}jahresrueckblick.html">Jahresrückblick</a><a href="{{ root }}monat/index.html">Monatsrückblicke</a><a href="{{ root }}tarifvergleich.html">Tarifvergleich</a><a href="{{ root }}archiv.html">Archiv</a><a href="{{ root }}impressum.html">Impressum</a><a href="{{ root }}datenschutz.html">Datenschutz</a></nav>
+  <nav class="fuss-nav" aria-label="Weitere Seiten"><a href="{{ root }}fuer-ihre-website.html">Für Ihre Website</a><a href="{{ root }}strompreis-morgen.html">Strompreis morgen</a><a href="{{ root }}kalender.html">Kalender-Abo</a><a href="{{ root }}wochenplan.html">Kühlschrank-Plan</a><a href="{{ root }}jahresrueckblick.html">Jahresrückblick</a><a href="{{ root }}monat/index.html">Monatsrückblicke</a><a href="{{ root }}tarifvergleich.html">Tarifvergleich</a><a href="{{ root }}dynamische-stromtarife-anbieter.html">Anbieter</a><a href="{{ root }}archiv.html">Archiv</a><a href="{{ root }}impressum.html">Impressum</a><a href="{{ root }}datenschutz.html">Datenschutz</a></nav>
  </div>
 </footer>
 {% if data_json %}<script id="preisdaten" type="application/json">{{ data_json }}</script>{% endif %}
@@ -1652,7 +1733,7 @@ TEMPLATES = {
 <li>Wie lange läuft der Vertrag, und wie schnell kann ich kündigen?</li>
 <li>Komme ich mit schwankenden Monatskosten zurecht?</li>
 </ol>
-<p>Mehr dazu: <a href="{{ root }}wissen/lohnt-sich-dynamischer-tarif.html">Lohnt sich ein dynamischer Tarif für mich?</a> Unabhängig beraten auch die Verbraucherzentralen.</p>
+<p>Mehr dazu: <a href="{{ root }}wissen/lohnt-sich-dynamischer-tarif.html">Lohnt sich ein dynamischer Tarif für mich?</a> und die neutrale <a href="{{ root }}dynamische-stromtarife-anbieter.html">Übersicht der Anbieter</a>. Unabhängig beraten auch die Verbraucherzentralen.</p>
 {% endblock %}""",
 
     "check.html": """{% extends "base.html" %}
@@ -1680,6 +1761,7 @@ TEMPLATES = {
 <li>Die Schätzung zeigt nur den Vorteil durch Verschieben. Grundpreis und Kosten der Messstelle unterscheiden sich je nach Angebot und kommen dazu.</li>
 <li>Mit Wärmepumpe oder Wallbox gibt es zusätzlich günstigere Netzentgelte nach <a href="{{ root }}wissen/paragraf-14a-netzentgelte.html">§ 14a</a>.</li>
 <li>Mit konkreten Angeboten rechnen Sie im <a href="{{ root }}tarifvergleich.html">Tarifvergleich</a> genauer nach.</li>
+<li>Welche Anbieter es gibt und worin sie sich unterscheiden, zeigt die <a href="{{ root }}dynamische-stromtarife-anbieter.html">Anbieterübersicht</a>.</li>
 </ul>
 {% endblock %}""",
 
@@ -1756,6 +1838,54 @@ TEMPLATES = {
 {% else %}<p>Für die typische Woche werden mindestens zwei Wochen Daten gebraucht. Sie erscheint automatisch, sobald genug Tage gesammelt sind.</p>{% endif %}
 <p class="kuehl-fuss">Aktuelle Zeiten jeden Tag auf {{ site_url }}/. Ausgewertet wurden {{ plan.n_days }} Tage bis {{ built_date }}. Nur mit dynamischem Stromtarif sparen Sie durch die Uhrzeit Geld. {{ source }}</p>
 </div>
+{% endblock %}""",
+
+    "anbieter.html": """{% extends "base.html" %}
+{% block body %}
+<h1 style="margin-top:1.6rem">Dynamische Stromtarife: Anbieter im Überblick</h1>
+<p>Eine neutrale Übersicht der bekanntesten Anbieter. Wir nennen bewusst keine Cent-Beträge, weil sich Gebühren oft ändern. Jede Angabe hat eine Quelle.</p>
+<p class="{{ 'hinweis' if veraltet else 'leise' }}">Stand der Angaben: {{ stand }}.{% if veraltet %} Diese Übersicht wurde seit über drei Monaten nicht überprüft.{% endif %} Prüfen Sie die aktuellen Bedingungen immer im Preisblatt des Anbieters.{% if not hat_werbung %} Wir erhalten für die Links auf dieser Seite derzeit keine Provision.{% endif %}</p>
+
+<h2>Worauf es beim Vergleich ankommt</h2>
+<ol class="kriterien">
+<li><strong>Der Börsenpreis ist bei allen gleich.</strong> Unterschiede gibt es vor allem bei den Gebühren des Anbieters: monatliche Grundgebühr und ein möglicher Aufschlag pro Kilowattstunde. Netzentgelte, Steuern und Umlagen sind überall gleich.</li>
+<li><strong>Mit oder ohne Smart Meter?</strong> Manche Anbieter bieten den Tarif auch ohne intelligenten Zähler an. Dann wird aber nach Monatsdurchschnitt oder Standardprofil abgerechnet. Wann <em>Sie</em> Strom verbrauchen, spielt dann keine Rolle, das Verschieben von Geräten spart nichts. Wer die günstigen Stunden nutzen will, braucht einen Smart Meter.</li>
+<li><strong>Was der Smart Meter kostet.</strong> Für Haushalte mit bis zu 10.000 kWh Verbrauch darf der Betrieb höchstens 40 € im Jahr kosten. Ein freiwillig bestellter Einbau kostet einmalig 100 €, laut Verbraucherzentrale Niedersachsen (Stand Juli 2026). Bei E-Auto-Wallbox, Wärmepumpe oder hohem Verbrauch wird er ohnehin eingebaut.</li>
+<li><strong>Kündigung.</strong> Gute dynamische Tarife lassen sich monatlich kündigen. So kommen Sie schnell wieder heraus, wenn es nicht passt.</li>
+<li><strong>Passt es überhaupt zu Ihnen?</strong> Das hängt davon ab, wie viel Strom Sie verschieben können. Der <a href="{{ root }}wechsel-check.html">Wechsel-Check</a> beantwortet das in sechs Fragen.</li>
+</ol>
+
+<h2>Die Anbieter auf einen Blick</h2>
+<div class="scroll"><table class="tabelle anbieter-tabelle">
+<tr><th>Anbieter</th><th>Geeignet für</th><th>Ohne Smart Meter?</th><th>Kündigung</th></tr>
+{% for a in anbieter %}<tr><td><a href="#{{ a.anker }}"><strong>{{ a.name }}</strong></a></td><td>{{ a.fuer }}</td><td>{{ a.ohne_sm }}</td><td>{{ a.kuendigung }}</td></tr>{% endfor %}
+</table></div>
+
+{% for a in anbieter %}
+<section class="anbieter" id="{{ a.anker }}">
+ <h2>{{ a.name }}</h2>
+ <p><strong>Geeignet für:</strong> {{ a.fuer }}.</p>
+ <ul>{% for f in a.fakten %}<li>{{ f }}</li>{% endfor %}</ul>
+ <p>{% if a.affiliate_url %}<a class="knopf" href="{{ a.affiliate_url }}" rel="sponsored nofollow noopener" target="_blank">Zum Angebot von {{ a.name.split(' (')[0] }}</a> <span class="leise">Werbung: Bei Abschluss erhalten wir eventuell eine Provision. Für Sie ändert sich der Preis nicht.</span>{% else %}<a href="{{ a.url }}" rel="nofollow noopener" target="_blank">Zur Seite von {{ a.name.split(' (')[0] }}</a>{% endif %}</p>
+ <p class="quellen">Quellen: {% for t, u in a.quellen %}<a href="{{ u }}" rel="noopener nofollow" target="_blank">{{ t }}</a>{% if not loop.last %}; {% endif %}{% endfor %}</p>
+</section>
+{% endfor %}
+
+<h2>Und mein Stadtwerk?</h2>
+<p>Seit dem 1. Januar 2025 müssen alle Stromlieferanten einen dynamischen Tarif anbieten (§&nbsp;41a Energiewirtschaftsgesetz). Fragen Sie also auch Ihr Stadtwerk oder Ihren jetzigen Anbieter. Ein Beispiel: Die Stadtwerke München bieten einen dynamischen Ökostromtarif mit Viertelstundenpreisen an, monatlich kündbar, mit intelligentem Messsystem als Voraussetzung, derzeit nur im Postleitzahlgebiet 80000 bis 81999.</p>
+<p class="quellen">Quellen: <a href="https://www.gesetze-im-internet.de/enwg_2005/__41a.html" rel="noopener" target="_blank">§&nbsp;41a EnWG</a>; <a href="https://www.swm.de/strom/oekostrom/oekostrom-dynamisch" rel="noopener nofollow" target="_blank">SWM: Ökostrom dynamisch</a></p>
+
+<h2>Weitere Empfehlungen von Finanztip</h2>
+<p>Finanztip hat im September 2025 neben Ostrom und Octopus auch <strong>naturstrom smart</strong> und <strong>Volkswagen Naturstrom Flex</strong> wegen niedriger Gebühren empfohlen. Wichtig laut Finanztip: Je unflexibler Ihr Stromverbrauch, desto eher wird ein dynamischer Tarif zum Kostenrisiko.</p>
+<p class="quellen">Quelle: <a href="https://finanztip.de/daily/stromtarif-ohne-festpreis-hunderte-euro-sparen-oder-risiko/" rel="noopener" target="_blank">Finanztip, 19.09.2025</a></p>
+
+<h2>So gehen Sie vor</h2>
+<ol>
+<li>Machen Sie den <a href="{{ root }}wechsel-check.html">Wechsel-Check</a>: Lohnt es sich für Sie überhaupt?</li>
+<li>Holen Sie zwei oder drei Preisblätter ein und tragen Sie Grundgebühr und Aufschlag in den <a href="{{ root }}tarifvergleich.html">Tarifrechner</a> ein.</li>
+<li>Klären Sie, ob bei Ihnen ein Smart Meter vorhanden ist oder eingebaut werden kann.</li>
+<li>Bei Unsicherheit berät die Verbraucherzentrale unabhängig.</li>
+</ol>
 {% endblock %}""",
 
     "stats.html": """{% extends "base.html" %}
@@ -1905,6 +2035,80 @@ TEMPLATES = {
 <h1>{{ w.title }}</h1>
 {{ body }}
 <nav class="weiter" aria-label="Weiter"><a href="{{ root }}index.html">Zum Strompreis heute</a><a href="index.html">Weitere Erklärungen</a></nav>
+{% endblock %}""",
+
+    "widget.html": """<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Strom-Uhr: Wann ist Strom heute günstig?</title>
+<link rel="canonical" href="{{ site_url }}/">
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+ html{font-size:100%}
+ body{background:transparent}
+ html,body{margin:0;background:transparent!important}
+ .w{max-width:26rem;margin:0 auto;padding:.6rem .75rem;border:1px solid var(--linie);border-radius:8px;background:var(--papier)}
+ .w[data-lvl=g]{background:var(--gruen-hell)}.w[data-lvl=y]{background:var(--gelb-hell)}.w[data-lvl=r]{background:var(--rot-hell)}
+ .w-oben{display:grid;grid-template-columns:minmax(4.6rem,7rem) minmax(0,1fr);gap:.7rem;align-items:center}
+ .w .uhr{max-width:7rem}
+ .w-name{font-weight:700;font-size:.85rem;color:var(--blau);margin:0 0 .15rem}
+ .w .satz{font-size:1.25rem;margin:0 0 .25rem}
+ .w p{margin:.2rem 0;font-size:.92rem;line-height:1.35;max-width:none}
+ .w .bis{font-size:.95rem}
+ #jetzt-hint,#jetzt-preis,#jetzt-next{display:none}
+ .w-fuss{border-top:1px solid var(--linie);margin-top:.6rem!important;padding-top:.45rem}
+ .w-fuss a{font-weight:700}
+ .w-quelle{display:block;font-size:.72rem;color:var(--grau);margin-top:.15rem}
+ @media (max-width:20rem){.w{padding:.5rem .6rem}.w .satz{font-size:1.05rem}.w p{font-size:.85rem}.w-oben{gap:.5rem}.w .uhr .ziffer{font-size:15px}}
+</style>
+</head>
+<body>
+<div class="w lage" id="jetzt" data-lvl="" aria-live="polite">
+ <div class="w-oben">
+  {{ dial }}
+  <div>
+   <p class="w-name">Strom-Uhr</p>
+   <p class="satz" id="jetzt-satz">Strompreis heute</p>
+   <p class="bis" id="jetzt-bis">Am günstigsten {{ wann }}: {{ best.h_from }} bis {{ best.h_to }} Uhr.</p>
+  </div>
+ </div>
+ <p id="jetzt-next"></p>
+ <p id="jetzt-beste"></p>
+ <p id="jetzt-hint"></p><p id="jetzt-preis"></p>
+ <p class="w-fuss"><a href="{{ site_url }}/" target="_blank" rel="noopener">Alle Zeiten und Geräte bei der Strom-Uhr</a>
+ <span class="w-quelle">{{ source }}</span></p>
+</div>
+<script id="preisdaten" type="application/json">{{ data_json }}</script>
+<script src="../assets/app.js" defer></script>
+</body></html>""",
+
+    "einbinden.html": """{% extends "base.html" %}
+{% block body %}
+<h1 style="margin-top:1.6rem">Die Strom-Uhr für Ihre Website</h1>
+<p>Sie betreiben eine Website, einen Blog, eine Vereins- oder Gemeindeseite, ein Forum rund ums E-Auto oder Energiesparen? Binden Sie die Strom-Uhr kostenlos ein. Sie zeigt Ihren Besuchern, ob Strom gerade günstig ist und wann die günstigsten Stunden kommen, und aktualisiert sich jeden Tag von selbst.</p>
+<h2>So sieht sie aus</h2>
+<iframe src="widget/uhr.html" title="Strom-Uhr: Wann ist Strom heute günstig? (Vorschau)" width="360" height="300" style="border:0;max-width:100%" loading="lazy"></iframe>
+<h2>Code zum Einbinden</h2>
+<p>Kopieren Sie diesen Code und fügen Sie ihn dort in Ihre Seite ein, wo die Uhr erscheinen soll. In den meisten Baukästen und in WordPress geht das mit einem Block oder Element für „HTML“ oder „Code“.</p>
+<textarea id="code-widget" class="code-feld" rows="5" readonly>{{ widget_code }}</textarea>
+<p><button type="button" class="knopf" data-copy="code-widget">Code kopieren</button> <span class="kopiert" role="status" aria-live="polite"></span></p>
+<p class="leise">Der Link unter dem Fenster gehört dazu: So finden Ihre Besucher die Strom-Uhr auch dann, wenn das Fenster nicht geladen werden kann. Die Uhr passt sich der Breite an und braucht mindestens 280 Pixel, zum Beispiel in einer Seitenleiste.</p>
+<h2>Hinweis zum Datenschutz für Ihre Website</h2>
+<p>Die Strom-Uhr setzt keine Cookies und verfolgt Ihre Besucher nicht. Sie wird aber von GitHub Pages (GitHub Inc.) geladen. Dabei verarbeitet GitHub technisch notwendige Daten wie die IP-Adresse der Besucher. Erwähnen Sie die Einbindung deshalb in Ihrer Datenschutzerklärung, oder nutzen Sie die Variante ohne Einbettung.</p>
+<h2>Variante ohne Einbettung: nur ein Link</h2>
+<p>Ein einfacher Link lädt nichts von fremden Servern und braucht keinen Datenschutzhinweis.</p>
+<textarea id="code-link" class="code-feld" rows="2" readonly>{{ link_code }}</textarea>
+<p><button type="button" class="knopf zweit" data-copy="code-link">Link-Code kopieren</button> <span class="kopiert" role="status" aria-live="polite"></span></p>
+<h2>Bedingungen</h2>
+<ul>
+<li>Die Einbindung ist kostenlos, auch auf gewerblichen Seiten.</li>
+<li>Bitte binden Sie die Uhr unverändert ein. Die Quellenangabe zu den Strompreisdaten muss sichtbar bleiben, das verlangt deren Lizenz (CC BY 4.0).</li>
+<li>Die Angaben sind Börsenpreise ohne Gewähr und keine Tarifberatung.</li>
+</ul>
+<p>Fragen oder Wünsche? Die Kontaktdaten stehen im <a href="{{ root }}impressum.html">Impressum</a>.</p>
 {% endblock %}""",
 
     "legal.html": """{% extends "base.html" %}
@@ -2076,6 +2280,7 @@ WISSEN = [
 <h2>So prüfen Sie es</h2>
 <ol>
 <li>Machen Sie den <a href="{{ root }}wechsel-check.html">Wechsel-Check</a>.</li>
+<li>Verschaffen Sie sich einen Überblick über die <a href="{{ root }}dynamische-stromtarife-anbieter.html">Anbieter</a>.</li>
 <li>Rechnen Sie im <a href="{{ root }}tarifvergleich.html">Tarifvergleich</a> mit den Preisen konkreter Angebote nach.</li>
 <li>Vergleichen Sie auch Grundpreis und Kosten der Messstelle.</li>
 <li>Fragen Sie bei Unsicherheit Ihre Verbraucherzentrale.</li>
@@ -2491,6 +2696,20 @@ def render_site(analysed: list[dict], thr: dict, stats: dict, built: datetime) -
         {"titel": "Alle günstigen Stunden", "text": "Jede grüne Phase des Tages als eigener Termin. Gut, wenn Sie mehrere Geräte über den Tag verteilen.",
          "url": f"{SITE_URL}/kalender/guenstige-stunden.ics", "webcal": f"webcal://{host}/kalender/guenstige-stunden.ics"},
     ]
+    alter = (today - ANBIETER_STAND).days
+    if alter > 90:
+        log.warning("Anbieterübersicht ist %d Tage alt – bitte Angaben prüfen und ANBIETER_STAND aktualisieren", alter)
+        if os.environ.get("GITHUB_ACTIONS"):      # gelber Hinweis in der GitHub-Actions-Übersicht
+            print(f"::warning title=Anbieterübersicht prüfen::Die Angaben sind {alter} Tage alt. "
+                  f"Bitte Anbieter prüfen und ANBIETER_STAND in main.py aktualisieren.")
+    anbieter = [{**a, "anker": "a-" + "".join(ch for ch in a["name"].lower() if ch.isalnum())[:20]} for a in ANBIETER]
+    emit("dynamische-stromtarife-anbieter.html", "anbieter.html", anbieter=anbieter, veraltet=alter > 90,
+         stand=f"{ANBIETER_STAND.day}. {MONTHS[ANBIETER_STAND.month - 1]} {ANBIETER_STAND.year}",
+         hat_werbung=any(a["affiliate_url"] for a in ANBIETER), nav="tarife",
+         canon="dynamische-stromtarife-anbieter.html", show_affiliate=False,
+         title="Dynamische Stromtarife: Anbieter im Überblick",
+         description="Tibber, Ostrom, Octopus, Rabot und Co. neutral erklärt: Wer braucht einen Smart Meter, wie wird "
+                     "abgerechnet, wie kündbar? Mit Quellen und ohne Werbeversprechen.")
     emit("kalender.html", "kalender.html", kalender=kalender, nav="heute", canon="kalender.html",
          title="Günstige Strom-Zeiten im Kalender abonnieren",
          description="Die günstigen Stunden von heute und morgen automatisch im Google-, Apple- oder Outlook-Kalender. "
@@ -2541,7 +2760,22 @@ def render_site(analysed: list[dict], thr: dict, stats: dict, built: datetime) -
             log.warning("legal/%s.html fehlt – Platzhaltertext wird verwendet!", name)
         emit(f"{name}.html", "legal.html", title=title, content=content, canon=f"{name}.html",
              description=f"{title} von {SITE_NAME}")
-    pages_for_sitemap = list(pages)
+    # Widget zum Einbinden (eigenständige Seite, nicht indexiert, nicht in der Sitemap)
+    wb = next_best_window([a for a in days if a["date"] >= today], built)
+    w_day, w_best = wb if wb else (ref_day, ref_day["windows"][3])
+    w_wann = "heute" if w_day["date"] == today else ("morgen" if w_day["date"] == today + timedelta(days=1) else f'am {w_day["short"]}')
+    emit("widget/uhr.html", "widget.html", dial=ref_day["dial_live"], best=w_best, wann=w_wann,
+         data_json=data_json, title="Strom-Uhr Widget", canon="widget/uhr.html")
+    widget_code = (f'<iframe src="{SITE_URL}/widget/uhr.html" title="Strom-Uhr: Wann ist Strom heute günstig?" '
+                   f'width="360" height="300" style="border:0;max-width:100%" loading="lazy"></iframe>\n'
+                   f'<p><a href="{SITE_URL}/">Strompreis heute: günstige Stunden bei der Strom-Uhr</a></p>')
+    link_code = f'<a href="{SITE_URL}/">Strompreis heute: Wann ist Strom günstig? Zur Strom-Uhr</a>'
+    emit("fuer-ihre-website.html", "einbinden.html", widget_code=widget_code, link_code=link_code,
+         nav="", canon="fuer-ihre-website.html",
+         title="Strom-Uhr kostenlos auf Ihrer Website einbinden",
+         description="Die Strom-Uhr als kostenloses Widget für Vereine, Blogs und Gemeindeseiten: zeigt täglich, "
+                     "wann Strom günstig ist. Ohne Cookies, mit Code zum Kopieren.")
+    pages_for_sitemap = [p for p in pages if not p.startswith("widget/")]
 
     # 404-Seite (absolute Links, weil sie unter jedem Pfad ausgeliefert wird)
     emit("404.html", "notfound.html", root=f"{SITE_URL}/", title="Seite nicht gefunden", canon="404.html", description="Seite nicht gefunden")
