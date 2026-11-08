@@ -163,7 +163,8 @@ def short_date(d: date) -> str:
 # affiliate_url erst eintragen, wenn das Partnerprogramm angenommen hat (wird dann als Werbung gekennzeichnet).
 ANBIETER_STAND = date(2026, 11, 3)
 ANBIETER = [
-    {"name": "Tibber", "url": "https://tibber.com/de", "affiliate_url": "",
+    {"name": "Tibber", "url": "https://tibber.com/de",
+     "affiliate_url": "https://www.awin1.com/cread.php?awinmid=57405&awinaffid=3143536&ued=https://tibber.com/de&platform=sl",
      "fuer": "Haushalte mit Smart Meter, die ihren Verbrauch per App steuern möchten",
      "ohne_sm": "ja, aber dann Abrechnung zum Monatsdurchschnitt",
      "kuendigung": "monatlich kündbar",
@@ -199,7 +200,8 @@ ANBIETER = [
                 "Ohne Smart Meter wird nach einem Standardlastprofil für Ihre Region abgerechnet. Ihr tatsächlicher Stundenverbrauch ist dann nicht bekannt, Verschieben senkt Ihre Rechnung nicht.",
                 "Das Preisrisiko tragen bei diesem Modell die Kunden."],
      "quellen": [("ZfK-Interview mit Rabot Energy (12/2024)", "https://www.zfk.de/digitalisierung/smart-city-energy/unsere-kunden-sparen-bei-dynamischen-tarifen-bis-zu-40-prozent-auch-ohne-intelligentes-messsystem")]},
-    {"name": "naturstrom (naturstrom smart)", "url": "https://www.naturstrom.de/privatkunden/oekostrom/naturstrom-smart", "affiliate_url": "",
+    {"name": "naturstrom (naturstrom smart)", "url": "https://www.naturstrom.de/privatkunden/oekostrom/naturstrom-smart",
+     "affiliate_url": "https://www.awin1.com/cread.php?awinmid=11937&awinaffid=3143536&ued=https://www.naturstrom.de/privatkunden/oekostrom/naturstrom-smart&platform=sl",
      "fuer": "Haushalte mit Smart Meter, die Ökostrom aus Deutschland möchten, besonders mit E-Auto oder Wärmepumpe",
      "ohne_sm": "nein, bis dahin gilt ein Übergangstarif mit Festpreis",
      "kuendigung": "keine Mindestlaufzeit, 4 Wochen zum Monatsende",
